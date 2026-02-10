@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QA Response Schema",
+  "description": "Default schema for validating QA review responses",
+  "type": "object",
+  "required": ["item_id", "verdict", "document_verification", "comments"],
+  "properties": {
+    "item_id": {
+      "type": "string",
+      "description": "Identifier for the item being QA'd (from worker response)"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "escalate"],
+      "description": "QA verdict: pass = work acceptable, fail = send back to worker, escalate = cannot be resolved by QA"
+    },
+    "document_verification": {
+      "type": "array",
+      "description": "Verification of each evidence document cited by the worker",
+      "items": {
+        "type": "object",
+        "required": ["evidence_num", "document", "exists", "supports_finding"],
+        "properties": {
+          "evidence_num": {
+            "type": "integer",
+            "description": "Evidence item number from worker response"
+          },
+          "document": {
+            "type": "string",
+            "description": "Document name from worker evidence"
+          },
+          "section": {
+            "type": "string",
+            "description": "Section referenced in worker evidence"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path to document (from worker evidence)"
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "Whether the document was found at the specified path"
+          },
+          "supports_finding": {
+            "type": "boolean",
+            "description": "Whether the document section supports the worker's finding"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes about verification (e.g., 'Confirmed section contains policy statement')"
+          }
+        }
+      }
+    },
+    "comments": {
+      "type": "string",
+      "description": "Required summary of QA verification work performed. Must always be provided."
+    },
+    "issues": {
+      "type": "array",
+      "description": "List of issues found during QA. Empty array if no issues.",
+      "items": {
+        "type": "object",
+        "required": ["type", "description"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["evidence_not_found", "unsupported_claim", "example_value_used", "missing_path", "incorrect_section", "other"],
+            "description": "Type of issue found"
+          },
+          "evidence_num": {
+            "type": "integer",
+            "description": "Evidence item number related to this issue (if applicable)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the issue"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "major", "minor"],
+            "description": "Issue severity level"
+          }
+        }
+      }
+    },
+    "auto_fail_reasons": {
+      "type": "array",
+      "description": "Automatic failure conditions detected",
+      "items": {
+        "type": "string",
+        "enum": [
+          "example_values_detected",
+          "document_not_found",
+          "section_does_not_support_claim",
+          "missing_evidence_paths",
+          "placeholder_text_detected"
+        ]
+      }
+    }
+  }
+}

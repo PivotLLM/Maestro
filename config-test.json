@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_dir": "MAESTRO_TEST_ROOT",
+  "chroot": "MAESTRO_TEST_DATA",
+  "playbooks_dir": "data/playbooks",
+  "projects_dir": "data/projects",
+  "reference_dirs": [
+    {"path": "data/reference", "mount": "user"}
+  ],
+  "mark_non_destructive": false,
+  "llms": [
+    {
+      "id": "default",
+      "display_name": "Test Model",
+      "type": "command",
+      "command": "echo",
+      "args": ["Test response for: {{PROMPT}}"],
+      "description": "Test model for integration testing.",
+      "enabled": false
+    },
+    {
+      "id": "test-success",
+      "display_name": "Test Success LLM",
+      "type": "command",
+      "command": "echo",
+      "args": ["{\"status\": \"ok\", \"message\": \"Test successful\", \"prompt\": \"{{PROMPT}}\"}"],
+      "description": "Returns valid JSON for testing.",
+      "enabled": true
+    },
+    {
+      "id": "test-stderr",
+      "display_name": "Test Stderr LLM",
+      "type": "command",
+      "command": "bash",
+      "args": ["-c", "if echo '{{PROMPT}}' | grep -q 'Respond with only the word OK'; then echo 'OK'; exit 0; else echo 'stdout output for {{PROMPT}}' && echo 'stderr error message' >&2 && exit 1; fi"],
+      "description": "Passes pre-flight check but fails with stderr for actual tasks.",
+      "enabled": true
+    },
+    {
+      "id": "test-infra-fail",
+      "display_name": "Test Infrastructure Failure",
+      "type": "command",
+      "command": "/nonexistent/command/that/does/not/exist",
+      "args": ["{{PROMPT}}"],
+      "description": "Command does not exist - tests infrastructure failure.",
+      "enabled": true
+    }
+  ],
+  "runner": {
+    "max_concurrent": 5,
+    "retry_delay_seconds": 60,
+    "rate_limit": {
+      "max_requests": 10,
+      "period_seconds": 60
+    }
+  },
+  "logging": {
+    "file": "maestro.log",
+    "level": "INFO"
+  }
+}

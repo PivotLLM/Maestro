@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "maestro/templates/qa_response",
+  "title": "Generic QA Response Schema",
+  "description": "Template JSON schema for playbook QA verification responses. Copy and customize for specific playbook needs.",
+  "type": "object",
+  "properties": {
+    "item_id": {
+      "type": "string",
+      "description": "Identifier for the item being QA'd (from worker response)"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "escalate"],
+      "description": "QA verdict: pass = work acceptable, fail = send back to worker, escalate = cannot be resolved by QA"
+    },
+    "document_verification": {
+      "type": "array",
+      "description": "Verification of each evidence document cited by the worker. MUST verify every document.",
+      "items": {
+        "type": "object",
+        "required": ["evidence_num", "document", "exists", "supports_finding"],
+        "properties": {
+          "evidence_num": {
+            "type": "integer",
+            "description": "Evidence item number from worker response"
+          },
+          "document": {
+            "type": "string",
+            "description": "Document name from worker evidence"
+          },
+          "section": {
+            "type": "string",
+            "description": "Section referenced in worker evidence"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path to document (from worker evidence)"
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "Whether the document was found at the specified path"
+          },
+          "supports_finding": {
+            "type": "boolean",
+            "description": "Whether the document section supports the worker's finding"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes about verification"
+          }
+        }
+      }
+    },
+    "comments": {
+      "type": "string",
+      "description": "Required summary of QA verification work performed. MUST always be provided, even for passing verdicts."
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "description"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["evidence_not_found", "unsupported_claim", "example_value_used", "missing_path", "incorrect_section", "other"],
+            "description": "Type of issue found"
+          },
+          "evidence_num": {
+            "type": "integer",
+            "description": "Evidence item number related to this issue"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the issue"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "major", "minor"],
+            "description": "Issue severity level"
+          }
+        }
+      },
+      "description": "List of issues found during QA. Empty array if no issues."
+    }
+  },
+  "required": ["item_id", "verdict", "document_verification", "comments"],
+  "additionalProperties": true,
+  "_playbook_customization_notes": {
+    "note": "This is a template. Customize for your playbook:",
+    "steps": [
+      "1. Copy this schema to your playbook's schemas/ directory",
+      "2. Adjust item_id field name to match your worker schema",
+      "3. Add domain-specific verification checks if needed",
+      "4. Customize issue types for your domain"
+    ],
+    "automatic_failure_conditions": [
+      "Document cited in evidence cannot be found at specified path",
+      "Section does not contain content supporting the worker's claim",
+      "Worker used example/placeholder values (e.g., 'DocumentName.docx', 'Section 42')",
+      "Evidence paths are missing or incomplete",
+      "Placeholder text detected (e.g., '[TODO]', 'example document')"
+    ],
+    "example": {
+      "item_id": "5.1",
+      "verdict": "pass",
+      "document_verification": [
+        {
+          "evidence_num": 1,
+          "document": "ISMS_Plan_EPS.docx",
+          "section": "5.1 Management Commitment",
+          "path": "ControlEvidence/Evidence/DCF001/ISMS_Plan_EPS.docx.md",
+          "exists": true,
+          "supports_finding": true,
+          "notes": "Confirmed section contains management commitment statement dated 2024-03-15"
+        }
+      ],
+      "comments": "Verified all evidence documents exist and support the worker's finding. Management commitment is clearly documented in referenced sections.",
+      "issues": []
+    }
+  }
+}

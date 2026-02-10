@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "maestro/templates/worker_response",
+  "title": "Generic Worker Response Schema",
+  "description": "Template JSON schema for playbook worker responses. Copy and customize for specific playbook needs.",
+  "type": "object",
+  "properties": {
+    "item_id": {
+      "type": "string",
+      "description": "Identifier for the item being evaluated (copy from task context)"
+    },
+    "requirement": {
+      "type": "string",
+      "description": "The requirement or question being addressed"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["complete", "information required", "review required"],
+      "description": "Assessment status: complete = fully evaluated, information required = missing evidence, review required = needs human review"
+    },
+    "test": {
+      "type": "string",
+      "description": "Brief description of testing methodology used to evaluate the item"
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Structured list of evidence documents supporting the finding",
+      "items": {
+        "type": "object",
+        "required": ["num", "document"],
+        "properties": {
+          "num": {
+            "type": "integer",
+            "description": "Evidence item number (1, 2, 3...)"
+          },
+          "document": {
+            "type": "string",
+            "description": "Document name (e.g., 'ISMS_Plan_EPS.docx')"
+          },
+          "section": {
+            "type": "string",
+            "description": "Relevant section within the document"
+          },
+          "path": {
+            "type": "string",
+            "description": "Full path to the document for QA verification"
+          }
+        }
+      }
+    },
+    "observations": {
+      "type": "string",
+      "description": "Brief observations about the finding"
+    },
+    "requests": {
+      "type": "string",
+      "description": "Information requests if status is 'information required', otherwise 'None'"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Professional summary suitable for external reporting"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Internal explanation of reasoning with evidence path references for QA verification"
+    }
+  },
+  "required": ["item_id", "status", "summary", "rationale"],
+  "additionalProperties": true,
+  "_playbook_customization_notes": {
+    "note": "This is a template. Customize for your playbook:",
+    "steps": [
+      "1. Copy this schema to your playbook's schemas/ directory",
+      "2. Rename item_id to match your domain (e.g., 'section' for audits, 'control' for assessments)",
+      "3. Add domain-specific required fields (test, evidence, etc.)",
+      "4. Define specific 'enum' values for status if needed",
+      "5. Add examples specific to your use case",
+      "6. IMPORTANT: Always include 'path' in evidence items for QA verification"
+    ],
+    "example": {
+      "item_id": "5.1",
+      "requirement": "Leadership and commitment to information security",
+      "status": "complete",
+      "test": "Reviewed ISMS documentation and management review records",
+      "evidence": [
+        {
+          "num": 1,
+          "document": "ISMS_Plan_EPS.docx",
+          "section": "5.1 Management Commitment",
+          "path": "ControlEvidence/Evidence/DCF001/ISMS_Plan_EPS.docx.md"
+        }
+      ],
+      "observations": "Management commitment clearly documented",
+      "requests": "None",
+      "summary": "Leadership commitment to ISMS is evidenced through formal policy statements",
+      "rationale": "The ISMS_Plan_EPS.docx (ControlEvidence/Evidence/DCF001/ISMS_Plan_EPS.docx.md) Section 5.1 contains explicit management commitment statements signed by executive leadership."
+    }
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "base_dir": "~/.maestro",
+  "chroot": "~/.maestro/data",
+  "playbooks_dir": "data/playbooks",
+  "projects_dir": "data/projects",
+  "reference_dirs": [
+     {"path": "data/reference", "mount": "user"}
+  ],
+  "mark_non_destructive": false,
+  "default_llm": "claude",
+  "llms": [
+    {
+      "id": "claude",
+      "display_name": "Claude-CLI",
+      "type": "command",
+      "stdin": true,
+      "command": "/PATH/TO/claude",
+      "args": [
+        "-p"
+      ],
+      "description": "Claude Code",
+      "enabled": false,
+      "recovery": {
+        "rate_limit_patterns": [
+          "you've hit your limit",
+          "quota exceeded",
+          "429",
+          "will rest at"
+        ],
+        "test_prompt": "Respond with only OK",
+        "test_schedule_seconds": [
+          30,
+          60,
+          120,
+          300,
+          900,
+          1800,
+          3600
+        ],
+        "abort_after_seconds": 43200
+      }
+    },
+    {
+      "id": "gpt",
+      "display_name": "Codex-CLI",
+      "type": "command",
+      "stdin": true,
+      "command": "/usr/local/bin/codex",
+      "args": [
+        "exec",
+        "--skip-git-repo-check"
+      ],
+      "description": "OpenAI Codex featuring GPT5",
+      "enabled": false,
+      "recovery": {
+        "rate_limit_patterns": [
+          "rate limit",
+          "quota exceeded",
+          "429",
+          "too many requests"
+        ],
+        "test_prompt": "Respond with only OK",
+        "test_schedule_seconds": [
+          20,
+          60,
+          120,
+          300,
+          900,
+          1800,
+          3600
+        ],
+        "abort_after_seconds": 43200
+      }
+    }
+  ],
+  "runner": {
+    "max_concurrent": 10,
+    "max_rounds": 5,
+    "round_delay_seconds": 30,
+    "limits": {
+      "max_retries": 5,
+      "max_worker": 2,
+      "max_qa": 2
+    },
+    "retry_delay_seconds": 60,
+    "rate_limit": {
+      "max_requests": 25,
+      "period_seconds": 60
+    }
+  },
+  "logging": {
+    "file": "maestro.log",
+    "level": "INFO"
+  }
+}

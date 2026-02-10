@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "base_dir": "~/.maestro",
+  "chroot": "~/.maestro/data",
+  "playbooks_dir": "data/playbooks",
+  "projects_dir": "data/projects",
+  "reference_dirs": [
+    {"path": "data/reference", "mount": "user"}
+  ],
+  "mark_non_destructive": false,
+  "default_llm": "claude-code",
+  "llms": [
+    {
+      "id": "claude-code",
+      "display_name": "Claude Code",
+      "type": "command",
+      "command": "claude",
+      "args": ["-p", "{{PROMPT}}"],
+      "description": "Claude Code CLI with prompt on command line.",
+      "enabled": true,
+      "recovery": {
+        "rate_limit_patterns": ["rate limit", "quota exceeded", "429", "overloaded"],
+        "test_prompt": "Respond with only: OK",
+        "test_schedule_seconds": [30, 300, 900, 3600],
+        "abort_after_seconds": 43200
+      }
+    },
+    {
+      "id": "claude-code-stdin",
+      "display_name": "Claude Code (stdin)",
+      "type": "command",
+      "command": "claude",
+      "args": ["-p"],
+      "stdin": true,
+      "description": "Claude Code CLI with prompt piped via stdin. Better for large prompts.",
+      "enabled": false
+    },
+    {
+      "id": "local-llm",
+      "display_name": "Local LLM",
+      "type": "command",
+      "command": "/usr/local/bin/llm",
+      "args": ["--model", "llama3", "{{PROMPT}}"],
+      "description": "Local LLM via command-line interface.",
+      "enabled": false
+    }
+  ],
+  "runner": {
+    "max_concurrent": 5,
+    "max_rounds": 10,
+    "round_delay_seconds": 30,
+    "limits": {
+      "max_retries": 3,
+      "max_worker": 2,
+      "max_qa": 2
+    },
+    "retry_delay_seconds": 60,
+    "rate_limit": {
+      "max_requests": 10,
+      "period_seconds": 60
+    },
+    "default_report_footer": ""
+  },
+  "logging": {
+    "file": "maestro.log",
+    "level": "INFO"
+  }
+}
