@@ -8,58 +8,87 @@
     {"path": "data/reference", "mount": "user"}
   ],
   "mark_non_destructive": false,
-  "default_llm": "claude-code",
+  "default_llm": "claude",
   "llms": [
     {
-      "id": "claude-code",
-      "display_name": "Claude Code",
+      "id": "claude",
+      "display_name": "Claude-CLI",
       "type": "command",
-      "command": "claude",
-      "args": ["-p", "{{PROMPT}}"],
-      "description": "Claude Code CLI with prompt on command line.",
-      "enabled": true,
+      "stdin": true,
+      "command": "/PATH/TO/claude",
+      "args": ["-p"],
+      "description": "Claude Code CLI (Anthropic). Prompt piped via stdin.",
+      "enabled": false,
       "recovery": {
-        "rate_limit_patterns": ["rate limit", "quota exceeded", "429", "overloaded"],
-        "test_prompt": "Respond with only: OK",
-        "test_schedule_seconds": [30, 300, 900, 3600],
+        "rate_limit_patterns": [
+          "you've hit your limit",
+          "quota exceeded",
+          "429",
+          "will rest at"
+        ],
+        "test_prompt": "Respond with only OK",
+        "test_schedule_seconds": [30, 60, 120, 300, 900, 1800, 3600],
         "abort_after_seconds": 43200
       }
     },
     {
-      "id": "claude-code-stdin",
-      "display_name": "Claude Code (stdin)",
+      "id": "gpt",
+      "display_name": "Codex-CLI",
       "type": "command",
-      "command": "claude",
-      "args": ["-p"],
       "stdin": true,
-      "description": "Claude Code CLI with prompt piped via stdin. Better for large prompts.",
-      "enabled": false
+      "command": "/PATH/TO/codex",
+      "args": ["exec", "--skip-git-repo-check"],
+      "description": "OpenAI Codex CLI (GPT). Prompt piped via stdin.",
+      "enabled": false,
+      "recovery": {
+        "rate_limit_patterns": [
+          "rate limit",
+          "quota exceeded",
+          "429",
+          "too many requests"
+        ],
+        "test_prompt": "Respond with only OK",
+        "test_schedule_seconds": [20, 60, 120, 300, 900, 1800, 3600],
+        "abort_after_seconds": 43200
+      }
     },
     {
-      "id": "local-llm",
-      "display_name": "Local LLM",
+      "id": "gemini",
+      "display_name": "Gemini-CLI",
       "type": "command",
-      "command": "/usr/local/bin/llm",
-      "args": ["--model", "llama3", "{{PROMPT}}"],
-      "description": "Local LLM via command-line interface.",
-      "enabled": false
+      "stdin": true,
+      "command": "/PATH/TO/gemini",
+      "args": ["--yolo", "--prompt", ""],
+      "description": "Google Gemini CLI. Prompt piped via stdin; --yolo auto-approves tool calls.",
+      "enabled": false,
+      "recovery": {
+        "rate_limit_patterns": [
+          "rate limit",
+          "quota exceeded",
+          "429",
+          "too many requests",
+          "resource exhausted"
+        ],
+        "test_prompt": "Respond with only OK",
+        "test_schedule_seconds": [30, 60, 120, 300, 900, 1800, 3600],
+        "abort_after_seconds": 43200
+      }
     }
   ],
   "runner": {
-    "max_concurrent": 5,
-    "max_rounds": 10,
+    "max_concurrent": 10,
+    "max_rounds": 5,
     "round_delay_seconds": 30,
     "limits": {
-      "max_retries": 3,
+      "max_retries": 5,
       "max_worker": 2,
       "max_qa": 2
     },
     "retry_delay_seconds": 60,
     "rate_limit": {
-      "max_requests": 10,
+      "max_requests": 25,
       "period_seconds": 60
-    },
-    "default_report_footer": ""
+    }
   },
   "logging": {
     "file": "maestro.log",

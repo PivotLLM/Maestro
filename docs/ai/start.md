@@ -125,9 +125,9 @@ task_create(
   title="Analyze REQ-001",
   type="analysis",
   prompt="Analyze this requirement...",
-  llm_model_id="claude-sonnet",
+  llm_model_id="claude",    # Use LLM ID from config (e.g. "claude", "gpt", "gemini")
   qa_enabled=true,
-  qa_llm_model_id="claude-opus"
+  qa_llm_model_id="claude"  # Can be a different LLM for QA
 )
 ```
 
@@ -143,7 +143,7 @@ task_update(
   uuid="task-uuid",
   instructions_file="my-playbook/instructions/new_instructions.md",
   instructions_file_source="playbook",
-  llm_model_id="claude-opus"
+  llm_model_id="gemini"  # Can switch to a different LLM
 )
 ```
 
@@ -206,7 +206,7 @@ list_create_tasks(
   type="analysis",
   title_template="Analyze {{id}}",
   prompt="Analyze the following requirement...",
-  llm_model_id="claude-sonnet"
+  llm_model_id="claude"   # LLM ID from config (e.g. "claude", "gpt", "gemini")
 )
 ```
 
@@ -223,7 +223,9 @@ Maestro provides tools for managing and testing LLMs:
 
 ```
 # Test if an LLM is available before starting a long run
-llm_test(llm_id="claude-sonnet")
+llm_test(llm_id="claude")   # Claude Code (Anthropic)
+llm_test(llm_id="gpt")      # OpenAI Codex
+llm_test(llm_id="gemini")   # Google Gemini CLI
 # Returns: { "available": true } or { "available": false, "error": "..." }
 ```
 
@@ -249,9 +251,11 @@ When you have many similar tasks that can run independently:
 - Set `parallel=false` (default) for sequential execution
 - Override at runtime: `task_run(..., parallel="true")` or `parallel="false"`
 
-**Worker LLM Configuration**: If a worker task needs to call Maestro tools (create lists, read files, etc.), the LLM must have MCP access to Maestro. Configure command-type LLMs like Claude Code or OpenAI Codex in headless mode with `--mcp-config` pointing to a Maestro configuration. If the LLM does not have MCP access to Maestro, the task prompt must be self-contained with all necessary context injected upfront.
+**Worker LLM Configuration**: If a worker task needs to call Maestro tools (create lists, read files, etc.), the LLM must have MCP access to Maestro. Configure command-type LLMs like Claude Code (`claude`), OpenAI Codex (`codex`), or Google Gemini CLI (`gemini`) in headless mode with `--mcp-config` pointing to a Maestro configuration. If the LLM does not have MCP access to Maestro, the task prompt must be self-contained with all necessary context injected upfront.
 
 **Budget Safeguard**: When `task_run` executes, the runner calculates a safety budget: `task_count × (max_worker + max_qa) × 1.10`. This prevents runaway costs from infinite loops or misconfigured tasks. If total LLM calls exceed the budget, execution halts with an error.
+
+**Timeout**: The default LLM call timeout is **10 minutes (600 seconds)**. This is intentionally generous for agentic workflows where the worker LLM may need to make multiple tool calls, read files, and perform complex analysis. **Do not pass `timeout` to `task_run` or `llm_dispatch` unless you have a specific reason to use a non-default value.** Explicitly setting a shorter timeout is a common source of spurious failures.
 
 **Example Workflow**:
 ```
@@ -306,10 +310,10 @@ task_create(
   path="analysis",
   title="Analyze REQ-001",
   prompt="...",
-  llm_model_id="claude-sonnet",
+  llm_model_id="claude",         # LLM ID from config
   qa_enabled=true,
   qa_prompt="Verify the analysis is accurate...",
-  qa_llm_model_id="claude-opus"
+  qa_llm_model_id="gemini"       # Can use a different LLM for QA
 )
 ```
 
@@ -586,6 +590,24 @@ taskset_create(project="my-project", path="analysis", title="Analysis Tasks")
 
 **Valid paths**: `analysis`, `analysis/security`, `qa-review`
 **Invalid paths**: `Analysis`, `security review`, `../escape`
+
+### Unnecessary Timeout Override
+
+**Pattern**: Passing `timeout=120` or `timeout=300` to `task_run` or `llm_dispatch` when there is no specific reason to do so.
+
+**Why it causes failures**: Agentic LLMs may need to make multiple tool calls, read files, and perform complex reasoning before returning. The default timeout (10 minutes) is sized for this. Short explicit timeouts cause tasks to be killed mid-execution, triggering retry cycles and misleading failure logs.
+
+**Rule**: **Never pass `timeout` unless you have a specific reason to deviate from the 10-minute default.** If you omit it, the safe default applies automatically.
+
+**Wrong**:
+```
+task_run(project="my-project", path="analysis", timeout=120)
+```
+
+**Correct**:
+```
+task_run(project="my-project", path="analysis")
+```
 
 ### Instructions File Not Found
 

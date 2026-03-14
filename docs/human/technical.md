@@ -114,15 +114,16 @@ Configuration is loaded from (in order of precedence):
   "projects_dir": "projects",
   "reference_dirs": [],
   "mark_non_destructive": false,
-  "default_llm": "claude-code",
+  "default_llm": "claude",
   "llms": [
     {
-      "id": "claude-code",
-      "display_name": "Claude Code",
+      "id": "claude",
+      "display_name": "Claude-CLI",
       "type": "command",
-      "command": "claude",
-      "args": ["-p", "{{PROMPT}}"],
-      "description": "Claude Code CLI with prompt on command line",
+      "stdin": true,
+      "command": "/PATH/TO/claude",
+      "args": ["-p"],
+      "description": "Claude Code CLI (Anthropic). Prompt piped via stdin.",
       "enabled": true
     }
   ],
@@ -188,31 +189,66 @@ These hints help MCP clients make informed decisions about tool permissions and 
 
 #### LLM Configuration
 
-LLMs are configured as command-line executables. Maestro executes the command with the prompt either as a command-line argument (using `{{PROMPT}}` placeholder) or piped via stdin.
+LLMs are configured as command-line executables. Maestro executes the command with the prompt either piped via stdin or substituted as a command-line argument using the `{{PROMPT}}` placeholder.
 
-**Command with prompt in args:**
+The following CLIs are supported out of the box (see `docs/ai/config-example.json` for a complete example):
+
+**Claude Code (Anthropic) — stdin:**
 ```json
 {
-  "id": "claude-code",
+  "id": "claude",
   "type": "command",
-  "display_name": "Claude Code",
-  "command": "claude",
-  "args": ["-p", "{{PROMPT}}"],
-  "description": "Claude Code CLI with prompt on command line",
+  "display_name": "Claude-CLI",
+  "command": "/PATH/TO/claude",
+  "args": ["-p"],
+  "stdin": true,
+  "description": "Claude Code CLI (Anthropic). Prompt piped via stdin.",
   "enabled": true
 }
 ```
 
-**Command with prompt via stdin:**
+**OpenAI Codex — stdin:**
 ```json
 {
-  "id": "claude-code-stdin",
+  "id": "gpt",
   "type": "command",
-  "display_name": "Claude Code (stdin)",
-  "command": "claude",
-  "args": ["-p"],
+  "display_name": "Codex-CLI",
+  "command": "/PATH/TO/codex",
+  "args": ["exec", "--skip-git-repo-check"],
   "stdin": true,
-  "description": "Claude Code CLI with prompt piped via stdin",
+  "description": "OpenAI Codex CLI (GPT). Prompt piped via stdin.",
+  "enabled": false
+}
+```
+
+**Google Gemini CLI — stdin:**
+```json
+{
+  "id": "gemini",
+  "type": "command",
+  "display_name": "Gemini-CLI",
+  "command": "/PATH/TO/gemini",
+  "args": ["--yolo", "--prompt", ""],
+  "stdin": true,
+  "description": "Google Gemini CLI. Prompt piped via stdin.",
+  "enabled": false
+}
+```
+
+Two flags are required for headless operation with Gemini:
+
+- `--prompt ""` — Gemini requires the `--prompt` flag (even with an empty string) to enter non-interactive mode. The actual prompt content is delivered via stdin. Using `-p` (the short form) does not work reliably for this purpose.
+- `--yolo` — Automatically approves all tool calls without user confirmation. **Only use in automated/headless contexts.** In YOLO mode, Gemini will execute any tool action (file writes, shell commands, web requests, etc.) without prompting. This is required for Maestro's task runner, but grants the LLM broad permissions to act on the system.
+
+**Custom command with prompt in args:**
+```json
+{
+  "id": "custom-llm",
+  "type": "command",
+  "display_name": "Custom LLM",
+  "command": "/usr/local/bin/llm",
+  "args": ["--model", "llama3", "{{PROMPT}}"],
+  "description": "Local LLM via command-line interface.",
   "enabled": false
 }
 ```
@@ -233,14 +269,15 @@ LLMs are configured as command-line executables. Maestro executes the command wi
 
 ```json
 {
-  "id": "claude-code",
-  "command": "claude",
-  "args": ["-p", "{{PROMPT}}"],
+  "id": "claude",
+  "command": "/PATH/TO/claude",
+  "args": ["-p"],
+  "stdin": true,
   "enabled": true,
   "recovery": {
-    "rate_limit_patterns": ["rate limit", "quota exceeded", "429"],
+    "rate_limit_patterns": ["you've hit your limit", "quota exceeded", "429", "will rest at"],
     "test_prompt": "Respond with only: OK",
-    "test_schedule_seconds": [30, 300, 900, 3600],
+    "test_schedule_seconds": [30, 60, 300, 900, 3600],
     "abort_after_seconds": 43200
   }
 }
@@ -1696,7 +1733,7 @@ QA results appear for ALL QA-enabled tasks, providing visibility into verificati
 Test LLM availability before starting tasks:
 
 ```
-llm_test(llm_id: "claude-sonnet")
+llm_test(llm_id: "claude")   # Or "gpt", "gemini", etc.
 # Returns: { "available": true } or { "available": false, "error": "..." }
 ```
 
@@ -1722,9 +1759,9 @@ LLMs can be configured with rate limit detection patterns:
 ```json
 {
   "llms": [{
-    "id": "claude-sonnet",
-    "rate_limit": {
-      "patterns": ["rate limit", "quota exceeded", "429"],
+    "id": "claude",
+    "recovery": {
+      "rate_limit_patterns": ["you've hit your limit", "quota exceeded", "429", "will rest at"],
       "test_prompt": "Respond with only OK"
     }
   }]
@@ -1737,7 +1774,7 @@ When rate limit patterns are detected in LLM output, Maestro can identify the is
 
 ```
 llm_dispatch(
-  llm_id: "claude-sonnet",
+  llm_id: "claude",  # LLM ID from config (e.g. "claude", "gpt", "gemini")
   prompt: "Your prompt here",
   timeout: 300
 )

@@ -125,7 +125,8 @@ const (
 	ToolReportEnd    = "report_end"
 
 	// MCP Tool Names - System
-	ToolHealth = "health"
+	ToolHealth    = "health"
+	ToolStartHere = "start_here"
 
 	// Project Status Constants
 	ProjectStatusPending    = "pending"

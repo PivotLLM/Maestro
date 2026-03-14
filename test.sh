@@ -1644,7 +1644,23 @@ run_test_expect_fail "8.2.3 Dispatch with empty prompt" \
 # SECTION 9: System Tools
 #===============================================================================
 
-print_section "SECTION 9: System Operations" "Tools: health, file_copy"
+print_section "SECTION 9: System Operations" "Tools: start_here, health, file_copy"
+
+print_subsection "9.0 Start Here"
+run_test "9.0.1 start_here returns content" \
+    "start_here" \
+    '{}' \
+    '"content"'
+
+run_test "9.0.2 start_here returns Maestro orientation text" \
+    "start_here" \
+    '{}' \
+    'Maestro'
+
+run_test "9.0.3 start_here returns path" \
+    "start_here" \
+    '{}' \
+    '"path"'
 
 print_subsection "9.1 Health Check"
 run_test "9.1.1 Health check returns status" \

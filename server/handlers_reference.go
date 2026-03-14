@@ -52,6 +52,17 @@ func (s *Server) handleReferenceGet(_ context.Context, request mcp.CallToolReque
 	return createJSONResult(item)
 }
 
+func (s *Server) handleStartHere(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.logToolCall(global.ToolStartHere, nil)
+
+	item, err := s.reference.Get("start.md", 0, 0)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return createJSONResult(item)
+}
+
 func (s *Server) handleReferenceSearch(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	query := mcp.ParseString(request, "query", "")
 	limit := int(mcp.ParseFloat64(request, "limit", 0))

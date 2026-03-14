@@ -160,11 +160,11 @@ maestro --version
 
 ## Configuring Maestro
 
-Before using Maestro with an AI assistant, you need to configure at least one LLM (Large Language Model) that will do the actual work. Maestro currently supports Claude Code and OpenAI's Codex, but any command capable of accepting a prompt on stdin or as an argument will work.
+Before using Maestro with an AI assistant, you need to configure at least one LLM (Large Language Model) that will do the actual work. Maestro supports Claude Code, OpenAI Codex, Google Gemini CLI, and any command capable of accepting a prompt on stdin or as an argument.
 
 ### Editing the Configuration
 
-Open `~/.maestro/config.json` in any text editor. You'll see a structure like this:
+Open `~/.maestro/config.json` in any text editor. A complete example with all supported LLMs is available in `docs/ai/config-example.json` in the repository (also accessible via `reference_get` with path `config-example.json`). The structure looks like this:
 
 ```json
 {
@@ -174,7 +174,7 @@ Open `~/.maestro/config.json` in any text editor. You'll see a structure like th
   "playbooks_dir": "data/playbooks",
   "projects_dir": "data/projects",
   "reference_dirs": [
-     {"path": "data/reference", "mount": "user"}
+    {"path": "data/reference", "mount": "user"}
   ],
   "mark_non_destructive": false,
   "default_llm": "claude",
@@ -185,112 +185,63 @@ Open `~/.maestro/config.json` in any text editor. You'll see a structure like th
       "type": "command",
       "stdin": true,
       "command": "/PATH/TO/claude",
-      "args": [
-        "-p"
-      ],
-      "description": "Claude Code",
-      "enabled": false,
-      "recovery": {
-        "rate_limit_patterns": [
-          "you've hit your limit",
-          "quota exceeded",
-          "429",
-          "will rest at"
-        ],
-        "test_prompt": "Respond with only OK",
-        "test_schedule_seconds": [
-          30,
-          60,
-          120,
-          300,
-          900,
-          1800,
-          3600
-        ],
-        "abort_after_seconds": 43200
-      }
+      "args": ["-p"],
+      "description": "Claude Code CLI (Anthropic). Prompt piped via stdin.",
+      "enabled": false
     },
     {
       "id": "gpt",
       "display_name": "Codex-CLI",
       "type": "command",
       "stdin": true,
-      "command": "/usr/local/bin/codex",
-      "args": [
-        "exec",
-        "--skip-git-repo-check"
-      ],
-      "description": "OpenAI Codex featuring GPT5",
-      "enabled": false,
-      "recovery": {
-        "rate_limit_patterns": [
-          "rate limit",
-          "quota exceeded",
-          "429",
-          "too many requests"
-        ],
-        "test_prompt": "Respond with only OK",
-        "test_schedule_seconds": [
-          20,
-          60,
-          120,
-          300,
-          900,
-          1800,
-          3600
-        ],
-        "abort_after_seconds": 43200
-      }
+      "command": "/PATH/TO/codex",
+      "args": ["exec", "--skip-git-repo-check"],
+      "description": "OpenAI Codex CLI (GPT). Prompt piped via stdin.",
+      "enabled": false
+    },
+    {
+      "id": "gemini",
+      "display_name": "Gemini-CLI",
+      "type": "command",
+      "stdin": true,
+      "command": "/PATH/TO/gemini",
+      "args": ["--yolo", "--prompt", ""],
+      "description": "Google Gemini CLI. Prompt piped via stdin.",
+      "enabled": false
     }
   ],
-  "runner": {
-    "max_concurrent": 10,
-    "max_rounds": 5,
-    "round_delay_seconds": 30,
-    "limits": {
-      "max_retries": 5,
-      "max_worker": 2,
-      "max_qa": 2
-    },
-    "retry_delay_seconds": 60,
-    "rate_limit": {
-      "max_requests": 25,
-      "period_seconds": 60
-    }
-  },
-  "logging": {
-    "file": "maestro.log",
-    "level": "INFO"
-  }
+  "runner": { ... },
+  "logging": { ... }
 }
 ```
 
 ### Setting Up LLMs
 
-Maestro uses command-line LLM tools. You can configure any CLI tool that accepts a prompt and returns a response.
+Maestro uses command-line LLM tools. The following CLIs are pre-configured in the sample config:
+
+| LLM | CLI Tool | Install |
+|-----|----------|---------|
+| Claude Code (Anthropic) | `claude` | `npm install -g @anthropic-ai/claude-code` |
+| Codex (OpenAI) | `codex` | `npm install -g @openai/codex` |
+| Gemini (Google) | `gemini` | `npm install -g @google/gemini-cli` |
+
+After installing a CLI tool, update its `"command"` path in `config.json` to the full path of the executable (use `which claude`, `which codex`, or `which gemini` to find it).
+
+You can also configure any other CLI tool that accepts a prompt on stdin or as a command-line argument.
 
 **Prompt delivery options:**
 
 1. **Command-line argument:** Use `{{PROMPT}}` placeholder in the `args` array. The prompt will be substituted into that position.
 
-2. **Standard input:** Set `"stdin": true` and the prompt will be piped to the command's stdin instead. This is preferable to the command line, especially for large prompts.
+2. **Standard input:** Set `"stdin": true` and the prompt will be piped to the command's stdin instead. This is preferable for large prompts.
 
-**Example with stdin:**
-```json
-{
-  "id": "claude-code-stdin",
-  "type": "command",
-  "command": "claude",
-  "args": ["-p"],
-  "stdin": true,
-  "description": "Claude Code with stdin",
-  "enabled": false
-}
-```
+**Note on Gemini CLI:** Two flags are required for headless operation:
+- `--prompt ""` — Gemini requires the `--prompt` flag (even with an empty string) to enter non-interactive mode. The actual prompt content is delivered via stdin.
+- `--yolo` — Automatically approves all tool calls without prompting the user. **Only use this in automated/headless contexts.** In YOLO mode, Gemini will execute any tool action (file writes, shell commands, web requests, etc.) without confirmation. This is necessary for Maestro's automated task runner, but be aware that the LLM has broad permissions to act on your system.
 
 ### Enabling an LLM
 
-LLMs are disabled by default for safety. To enable one, change `"enabled": false` to `"enabled": true`.
+LLMs are disabled by default in the sample config. To enable one, change `"enabled": false` to `"enabled": true`.
 
 You need at least one enabled LLM for Maestro to function.
 

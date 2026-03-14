@@ -139,6 +139,12 @@ func (s *Server) destructiveTool(name string, opts ...mcp.ToolOption) mcp.Tool {
 
 // registerTools registers all MCP tools
 func (s *Server) registerTools() error {
+	// Start here tool - must be first
+	s.mcpServer.AddTool(
+		s.readOnlyTool(global.ToolStartHere,
+			mcp.WithDescription("CALL THIS FIRST. Returns the Maestro orientation guide. Using Maestro without reading this risks errors and data loss."),
+		), s.handleStartHere)
+
 	// Reference tools (read-only, embedded)
 	s.mcpServer.AddTool(
 		s.readOnlyTool(global.ToolReferenceList,
@@ -680,7 +686,7 @@ func (s *Server) registerTools() error {
 				mcp.Required(),
 			),
 			mcp.WithNumber("timeout",
-				mcp.Description("LLM call timeout in seconds (min: 60, max: 900, default: 300)"),
+				mcp.Description("LLM call timeout in seconds (min: 60, max: 1200, default: 600)"),
 			),
 		), s.handleLLMDispatch)
 

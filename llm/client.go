@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/PivotLLM/Maestro/config"
@@ -337,11 +338,29 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 
 	s.logger.Debugf("Executing command: %s %v (stdin: %v)", llm.Command, args, llm.Stdin)
 
-	// Create command with timeout
+	// Create context with timeout for deadline tracking.
+	// We do NOT pass this ctx to exec.CommandContext because exec.CommandContext
+	// only sends SIGKILL to the direct child process on timeout. If the child
+	// spawned grandchildren (e.g., MCP client subprocesses), those grandchildren
+	// keep stdout/stderr pipes open and cmd.Wait() blocks forever waiting for EOF.
+	// Instead, we manage the process lifecycle manually below.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, llm.Command, args...)
+	// Use exec.Command (not exec.CommandContext) so we fully control process lifecycle.
+	cmd := exec.Command(llm.Command, args...)
+
+	// Setpgid: true puts the child in its own process group (pgid == child pid).
+	// This lets us kill the entire group — child AND all its grandchildren — with
+	// a single syscall.Kill(-pgid, SIGKILL), instead of only killing the direct child.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// WaitDelay is a safety net: if our process-group kill fails (e.g., a grandchild
+	// escaped the group via its own setsid) and a pipe-holding process is still running,
+	// Go will forcibly close the pipes after this duration so cmd.Wait() returns
+	// instead of blocking forever. 30 seconds is generous — by this point we've
+	// already sent SIGKILL, so any remaining process is truly stuck.
+	cmd.WaitDelay = 30 * time.Second
 
 	// Capture stdout and stderr
 	var stdout, stderr bytes.Buffer
@@ -353,8 +372,47 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 		cmd.Stdin = strings.NewReader(promptText)
 	}
 
-	// Run command
-	err := cmd.Run()
+	// Start the process (non-blocking, unlike cmd.Run())
+	if startErr := cmd.Start(); startErr != nil {
+		return nil, fmt.Errorf("infrastructure failure: %w", startErr)
+	}
+
+	// processExited is closed by the main goroutine after cmd.Wait() returns,
+	// signalling the watchdog goroutine to exit cleanly.
+	processExited := make(chan struct{})
+
+	// Watchdog goroutine: watches for context timeout and kills the entire
+	// process group when it fires.
+	go func() {
+		select {
+		case <-ctx.Done():
+			// Context timed out (or was cancelled). We use SIGKILL rather than
+			// SIGTERM because a hanging LLM subprocess is unlikely to respond to
+			// SIGTERM — it may be stuck in I/O or a blocking system call. SIGKILL
+			// is unconditional and cannot be caught or ignored.
+			//
+			// pgid == cmd.Process.Pid because Setpgid: true causes the OS to set
+			// the child's process group ID equal to its own PID. Negating the pgid
+			// tells the kernel to send the signal to every process in that group.
+			pgid := cmd.Process.Pid
+			killErr := syscall.Kill(-pgid, syscall.SIGKILL)
+			if killErr != nil && !errors.Is(killErr, syscall.ESRCH) {
+				// ESRCH means "no such process" — the process already exited before
+				// we could kill it. That is perfectly fine; we log everything else.
+				s.logger.Errorf("Failed to kill LLM process group %d: %v", pgid, killErr)
+			}
+		case <-processExited:
+			// Process finished on its own before the timeout; nothing to do.
+		}
+	}()
+
+	// Wait for the process (and all its I/O goroutines) to finish.
+	// WaitDelay ensures this call cannot block indefinitely even if a pipe-holding
+	// grandchild escaped the process group kill.
+	err := cmd.Wait()
+
+	// Signal the watchdog goroutine that the process has exited so it can return.
+	close(processExited)
 
 	// Get exit code
 	exitCode := 0
