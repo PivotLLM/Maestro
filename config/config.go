@@ -587,6 +587,19 @@ func (c *Config) normalizePaths() error {
 		return fmt.Errorf("failed to create agents directory at %s: %w", c.agentsDir, err)
 	}
 
+	// Write a README in the agents directory so users understand its purpose.
+	// Non-fatal: if we can't write it, log a warning and continue.
+	agentsReadme := filepath.Join(c.agentsDir, "README.txt")
+	if !fileExists(agentsReadme) {
+		readmeContent := "This directory serves as the working directory when command-line LLM agents\n" +
+			"(e.g. Claude, Codex, Gemini) are invoked by Maestro.\n\n" +
+			"It is created automatically and shared by all configured LLMs unless a\n" +
+			"per-LLM working_dir is specified in the Maestro configuration file.\n"
+		if err := os.WriteFile(agentsReadme, []byte(readmeContent), 0644); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Warning: could not write agents README at %s: %v\n", agentsReadme, err)
+		}
+	}
+
 	// Resolve per-LLM working directories
 	for i := range c.data.LLMs {
 		if c.data.LLMs[i].WorkingDir == "" {
