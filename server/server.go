@@ -1565,9 +1565,6 @@ func (s *Server) registerTools() error {
 			mcp.WithNumber("timeout",
 				mcp.Description("LLM call timeout in seconds (60-1200, default: 600)"),
 			),
-			mcp.WithBoolean("wait",
-				mcp.Description("Wait for all tasks to complete before returning (default: false). Useful for scripting."),
-			),
 		), s.handleTaskRun)
 
 	s.mcpServer.AddTool(

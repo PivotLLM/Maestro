@@ -82,7 +82,6 @@ func NewService(cfg *config.Config, logger *logging.Logger, libraryService *libr
 //goland:noinspection GoNameStartsWithPackageName
 type LLMInfo struct {
 	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
 	Description string `json:"description"`
 	Enabled     bool   `json:"enabled"`
 }
@@ -92,7 +91,6 @@ type LLMInfo struct {
 //goland:noinspection GoNameStartsWithPackageName
 type LLMExecInfo struct {
 	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
 	Mode        string `json:"mode"`         // "command" (only mode currently)
 	PromptInput string `json:"prompt_input"` // "stdin" or "args"
 }
@@ -111,7 +109,6 @@ func (s *Service) ListLLMs() *LLMListResult {
 	for _, llm := range s.config.LLMs() {
 		llms = append(llms, LLMInfo{
 			ID:          llm.ID,
-			DisplayName: llm.DisplayName,
 			Description: llm.Description,
 			Enabled:     llm.Enabled,
 		})
@@ -141,7 +138,6 @@ func (s *Service) GetExecInfo(llmID string) *LLMExecInfo {
 
 	return &LLMExecInfo{
 		ID:          llm.ID,
-		DisplayName: llm.DisplayName,
 		Mode:        mode,
 		PromptInput: promptInput,
 	}

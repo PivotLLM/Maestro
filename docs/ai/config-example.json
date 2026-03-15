@@ -14,7 +14,6 @@
   "llms": [
     {
       "id": "claude",
-      "display_name": "Claude-CLI",
       "type": "command",
       "stdin": true,
       "command": "claude",
@@ -35,7 +34,6 @@
     },
     {
       "id": "gpt",
-      "display_name": "Codex-CLI",
       "type": "command",
       "stdin": true,
       "command": "codex",
@@ -56,7 +54,6 @@
     },
     {
       "id": "gemini",
-      "display_name": "Gemini-CLI",
       "type": "command",
       "stdin": true,
       "command": "gemini",

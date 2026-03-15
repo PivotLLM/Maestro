@@ -99,9 +99,8 @@ const (
 
 // LLM represents an LLM configuration
 type LLM struct {
-	ID           string `json:"id"`
-	DisplayName  string `json:"display_name"`
-	Description  string `json:"description"`
+	ID          string `json:"id"`
+	Description string `json:"description"`
 	Enabled      bool   `json:"enabled,omitempty"`
 	SystemPrompt string `json:"system_prompt,omitempty"`
 
@@ -403,9 +402,6 @@ func (c *Config) validate() error {
 	for _, llm := range c.data.LLMs {
 		if llm.ID == "" {
 			return fmt.Errorf("LLM id cannot be empty")
-		}
-		if llm.DisplayName == "" {
-			return fmt.Errorf("LLM display_name cannot be empty for LLM %s", llm.ID)
 		}
 		if llm.Description == "" {
 			return fmt.Errorf("LLM description cannot be empty for LLM %s", llm.ID)

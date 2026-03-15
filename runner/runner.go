@@ -715,23 +715,14 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunRe
 		timeout:       timeout,
 	}
 
-	if req.Wait {
-		// Synchronous execution - block until complete
-		result.Message = fmt.Sprintf("executing %d tasks synchronously", len(eligibleTasks))
-		r.activeRuns.Add(1)
+	// Async execution - return immediately
+	result.Message = fmt.Sprintf("%d tasks queued for execution", len(eligibleTasks))
+	r.activeRuns.Add(1)
+	go func() {
+		defer r.activeRuns.Done()
+		defer r.runningProjects.Delete(req.Project)
 		r.executeRun(execParams)
-		r.activeRuns.Done()
-		r.runningProjects.Delete(req.Project)
-	} else {
-		// Async execution - return immediately
-		result.Message = fmt.Sprintf("%d tasks queued for execution", len(eligibleTasks))
-		r.activeRuns.Add(1)
-		go func() {
-			defer r.activeRuns.Done()
-			defer r.runningProjects.Delete(req.Project)
-			r.executeRun(execParams)
-		}()
-	}
+	}()
 
 	return result, nil
 }
@@ -1296,10 +1287,6 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		task.Work.LLMModelID = llmID
 	}
 
-	// Log task start
-	r.logToProject(project, fmt.Sprintf("Task %d: Started, LLM: %s", task.ID, llmID))
-	r.logger.Infof("Task %d: Started, LLM: %s", task.ID, llmID)
-
 	// Update task metadata but keep status as 'waiting' until fully complete
 	// This ensures restarts will pick up interrupted tasks
 	r.logger.Infof("Task %d: Updating task metadata (status stays waiting until complete)", task.ID)
@@ -1362,9 +1349,6 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	mode := "command"
 	promptInput := "args"
 	if execInfo != nil {
-		if execInfo.DisplayName != "" {
-			displayName = execInfo.DisplayName
-		}
 		mode = execInfo.Mode
 		promptInput = execInfo.PromptInput
 	}
@@ -2432,9 +2416,6 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 	qaMode := "command"
 	qaPromptInput := "args"
 	if qaExecInfo != nil {
-		if qaExecInfo.DisplayName != "" {
-			qaDisplayName = qaExecInfo.DisplayName
-		}
 		qaMode = qaExecInfo.Mode
 		qaPromptInput = qaExecInfo.PromptInput
 	}
@@ -2886,9 +2867,6 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int
 	revMode := "command"
 	revPromptInput := "args"
 	if revExecInfo != nil {
-		if revExecInfo.DisplayName != "" {
-			revDisplayName = revExecInfo.DisplayName
-		}
 		revMode = revExecInfo.Mode
 		revPromptInput = revExecInfo.PromptInput
 	}
