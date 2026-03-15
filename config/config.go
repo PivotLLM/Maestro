@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -42,15 +41,17 @@ func (c *Config) setupDefaultConfig(configPath string) error {
 
 // Config provides access to application configuration
 type Config struct {
-	configPath    string                 // resolved path to config file
-	data          *configData            // parsed configuration
-	firstRun      bool                   // true if config was just created
-	categories    []Category             // built from fixed category definitions
-	chrootDir     string                 // resolved chroot directory (optional)
-	playbooksDir  string                 // resolved playbooks directory
-	projectsDir   string                 // resolved projects directory
-	referenceDirs []ReferenceDirResolved // resolved external reference directories
-	embeddedFS    embed.FS               // embedded reference files
+	configPath        string                 // resolved path to config file
+	data              *configData            // parsed configuration
+	firstRun          bool                   // true if config was just created
+	categories        []Category             // built from fixed category definitions
+	chrootDir         string                 // resolved chroot directory (optional)
+	playbooksDir      string                 // resolved playbooks directory
+	projectsDir       string                 // resolved projects directory
+	agentsDir         string                 // resolved default agents directory for LLM execution
+	referenceDirs     []ReferenceDirResolved // resolved external reference directories
+	resolvedExtraPath []string               // resolved extra PATH entries for LLM command lookup
+	embeddedFS        embed.FS               // embedded reference files
 }
 
 // configData holds the parsed configuration (internal)
@@ -60,6 +61,8 @@ type configData struct {
 	Chroot                string         `json:"chroot,omitempty"`
 	PlaybooksDir          string         `json:"playbooks_dir,omitempty"`
 	ProjectsDir           string         `json:"projects_dir,omitempty"`
+	AgentsDir             string         `json:"agents_dir,omitempty"`
+	ExtraPath             []string       `json:"extra_path,omitempty"`
 	ReferenceDirs         []ReferenceDir `json:"reference_dirs,omitempty"`
 	DefaultLLM            string         `json:"default_llm,omitempty"`
 	LLMs                  []LLM          `json:"llms"`
@@ -111,6 +114,9 @@ type LLM struct {
 	Args []string `json:"args,omitempty"`
 	// Stdin: if true, prompt is piped to command's stdin instead of using {{PROMPT}} placeholder
 	Stdin bool `json:"stdin,omitempty"`
+
+	// WorkingDir is the working directory for process execution (resolved at load time)
+	WorkingDir string `json:"working_dir,omitempty"`
 
 	// RecoveryConfig configures error recovery for this LLM (rate limits, transient errors)
 	RecoveryConfig *LLMRecoveryConfig `json:"recovery,omitempty"`
@@ -342,6 +348,32 @@ func expandHomePath(path string) string {
 	return filepath.Join(home, path[2:])
 }
 
+// lookPath searches for the named executable using extraPaths prepended to the system PATH.
+// If command is an absolute path, it is verified to exist and returned directly.
+func lookPath(command string, extraPaths []string) (string, error) {
+	if filepath.IsAbs(command) {
+		if _, err := os.Stat(command); err != nil {
+			return "", fmt.Errorf("executable not found: %s", command)
+		}
+		return command, nil
+	}
+	searchDirs := append(extraPaths, filepath.SplitList(os.Getenv("PATH"))...)
+	for _, dir := range searchDirs {
+		if dir == "" {
+			continue
+		}
+		candidate := filepath.Join(dir, command)
+		info, err := os.Stat(candidate)
+		if err != nil {
+			continue
+		}
+		if !info.IsDir() && info.Mode()&0111 != 0 {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("executable %q not found in PATH", command)
+}
+
 // validate validates the configuration
 func (c *Config) validate() error {
 	// Check version
@@ -355,6 +387,16 @@ func (c *Config) validate() error {
 	// Check LLMs - at least one must be defined (but doesn't need to be enabled)
 	if len(c.data.LLMs) == 0 {
 		return fmt.Errorf("llms cannot be empty - please define at least one LLM")
+	}
+
+	// Resolve extra_path entries (expand ~/, keep only absolute paths)
+	for _, p := range c.data.ExtraPath {
+		resolved := expandHomePath(p)
+		if !filepath.IsAbs(resolved) {
+			_, _ = fmt.Fprintf(os.Stderr, "Warning: extra_path entry %q is not absolute after expansion, skipping\n", p)
+			continue
+		}
+		c.resolvedExtraPath = append(c.resolvedExtraPath, resolved)
 	}
 
 	llmIDs := make(map[string]bool)
@@ -405,11 +447,10 @@ func (c *Config) validate() error {
 
 		// Validate command executable exists (only for enabled LLMs)
 		if llm.Enabled {
-			// Expand tilde in command path before checking
 			expandedCmd := expandHomePath(llm.Command)
-			if _, err := exec.LookPath(expandedCmd); err != nil {
+			resolvedCmd, lookErr := lookPath(expandedCmd, c.resolvedExtraPath)
+			if lookErr != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "Warning: LLM %s: executable not found: %s - disabling\n", llm.ID, llm.Command)
-				// Find the LLM in the slice and disable it
 				for i := range c.data.LLMs {
 					if c.data.LLMs[i].ID == llm.ID {
 						c.data.LLMs[i].Enabled = false
@@ -417,13 +458,14 @@ func (c *Config) validate() error {
 					}
 				}
 			} else {
-				// Store the expanded path for use at runtime
+				// Store resolved absolute path for use at runtime
 				for i := range c.data.LLMs {
 					if c.data.LLMs[i].ID == llm.ID {
-						c.data.LLMs[i].Command = expandedCmd
+						c.data.LLMs[i].Command = resolvedCmd
 						break
 					}
 				}
+				_, _ = fmt.Fprintf(os.Stderr, "Info: LLM %s: using %s\n", llm.ID, resolvedCmd)
 			}
 		}
 	}
@@ -533,6 +575,29 @@ func (c *Config) normalizePaths() error {
 	// Normalize log file path (must be done before chroot validation)
 	if c.data.Logging.File != "" {
 		c.data.Logging.File = c.resolvePath(c.data.Logging.File)
+	}
+
+	// Resolve agents directory (default working dir for all LLM processes)
+	agentsDirRaw := c.data.AgentsDir
+	if agentsDirRaw == "" {
+		agentsDirRaw = "agents"
+	}
+	c.agentsDir = c.resolvePath(agentsDirRaw)
+	if err := os.MkdirAll(c.agentsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create agents directory at %s: %w", c.agentsDir, err)
+	}
+
+	// Resolve per-LLM working directories
+	for i := range c.data.LLMs {
+		if c.data.LLMs[i].WorkingDir == "" {
+			c.data.LLMs[i].WorkingDir = c.agentsDir
+		} else {
+			c.data.LLMs[i].WorkingDir = c.resolvePath(c.data.LLMs[i].WorkingDir)
+			if err := os.MkdirAll(c.data.LLMs[i].WorkingDir, 0755); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to create working directory for LLM %s at %s: %v\n",
+					c.data.LLMs[i].ID, c.data.LLMs[i].WorkingDir, err)
+			}
+		}
 	}
 
 	// Validate chroot containment if chroot is enabled
@@ -740,6 +805,16 @@ func (c *Config) EnabledLLMs() []LLM {
 // DefaultLLM returns the default LLM ID, or empty string if not configured
 func (c *Config) DefaultLLM() string {
 	return c.data.DefaultLLM
+}
+
+// AgentsDir returns the resolved default agents working directory
+func (c *Config) AgentsDir() string {
+	return c.agentsDir
+}
+
+// ExtraPath returns the resolved extra PATH entries used for LLM command lookup
+func (c *Config) ExtraPath() []string {
+	return c.resolvedExtraPath
 }
 
 // ConfigPath returns the path to the loaded config file

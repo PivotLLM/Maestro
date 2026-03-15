@@ -355,6 +355,13 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 	// a single syscall.Kill(-pgid, SIGKILL), instead of only killing the direct child.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
+	// Set working directory for the LLM process. This ensures the LLM runs in a
+	// known, trusted directory (important for tools like Gemini that restrict MCP
+	// server access based on the working directory).
+	if llm.WorkingDir != "" {
+		cmd.Dir = llm.WorkingDir
+	}
+
 	// WaitDelay is a safety net: if our process-group kill fails (e.g., a grandchild
 	// escaped the group via its own setsid) and a pipe-holding process is still running,
 	// Go will forcibly close the pipes after this duration so cmd.Wait() returns
