@@ -121,7 +121,8 @@ func (s *Service) ListLLMs() *LLMListResult {
 
 // GetExecInfo returns execution details for an LLM (for logging)
 func (s *Service) GetExecInfo(llmID string) *LLMExecInfo {
-	llm, ok := s.llmConfig[llmID]
+	canonical := s.config.ResolveID(llmID)
+	llm, ok := s.llmConfig[canonical]
 	if !ok {
 		return nil
 	}
@@ -143,9 +144,11 @@ func (s *Service) GetExecInfo(llmID string) *LLMExecInfo {
 	}
 }
 
-// GetLLM returns the full LLM configuration for the given ID
+// GetLLM returns the full LLM configuration for the given ID or alias.
+// Aliases are resolved to the canonical id before lookup.
 func (s *Service) GetLLM(llmID string) *config.LLM {
-	llm, ok := s.llmConfig[llmID]
+	canonical := s.config.ResolveID(llmID)
+	llm, ok := s.llmConfig[canonical]
 	if !ok {
 		return nil
 	}
@@ -162,7 +165,9 @@ func (s *Service) validateRequest(req *DispatchRequest) (*config.LLM, error) {
 		return nil, fmt.Errorf("prompt is required")
 	}
 
-	llm, exists := s.llmConfig[req.LLMID]
+	// Resolve alias to canonical id before lookup
+	canonical := s.config.ResolveID(req.LLMID)
+	llm, exists := s.llmConfig[canonical]
 	if !exists {
 		return nil, fmt.Errorf("unknown LLM ID: %s", req.LLMID)
 	}
@@ -253,7 +258,8 @@ func (s *Service) Dispatch(req *DispatchRequest) (*DispatchResult, error) {
 // Returns (false, nil) if LLM is rate-limited or unavailable (exit code != 0)
 // Returns (false, error) if infrastructure error prevents test
 func (s *Service) TestLLM(llmID string) (bool, error) {
-	llm, exists := s.llmConfig[llmID]
+	canonical := s.config.ResolveID(llmID)
+	llm, exists := s.llmConfig[canonical]
 	if !exists {
 		return false, fmt.Errorf("unknown LLM ID: %s", llmID)
 	}

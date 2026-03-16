@@ -52,6 +52,7 @@ type Config struct {
 	referenceDirs     []ReferenceDirResolved // resolved external reference directories
 	resolvedExtraPath []string               // resolved extra PATH entries for LLM command lookup
 	embeddedFS        embed.FS               // embedded reference files
+	llmAliasMap       map[string]string      // maps alias (or canonical id) → canonical id
 }
 
 // configData holds the parsed configuration (internal)
@@ -99,10 +100,11 @@ const (
 
 // LLM represents an LLM configuration
 type LLM struct {
-	ID          string `json:"id"`
-	Description string `json:"description"`
-	Enabled      bool   `json:"enabled,omitempty"`
-	SystemPrompt string `json:"system_prompt,omitempty"`
+	ID          string   `json:"id"`
+	Description string   `json:"description"`
+	Enabled     bool     `json:"enabled,omitempty"`
+	SystemPrompt string  `json:"system_prompt,omitempty"`
+	Aliases     []string `json:"aliases,omitempty"`
 
 	// Type specifies the provider type (only "command" supported for now)
 	Type string `json:"type,omitempty"`
@@ -466,22 +468,43 @@ func (c *Config) validate() error {
 		}
 	}
 
+	// Build alias map: maps any name (canonical id or alias) → canonical id
+	c.llmAliasMap = make(map[string]string)
+	for _, llm := range c.data.LLMs {
+		// Register canonical id → canonical id
+		if _, exists := c.llmAliasMap[llm.ID]; exists {
+			_, _ = fmt.Fprintf(os.Stderr, "Warning: LLM alias/id %q is already registered, skipping duplicate\n", llm.ID)
+		} else {
+			c.llmAliasMap[llm.ID] = llm.ID
+		}
+		// Register each alias → canonical id
+		for _, alias := range llm.Aliases {
+			if alias == llm.ID {
+				_, _ = fmt.Fprintf(os.Stderr, "Warning: LLM %s lists its own id %q as an alias, skipping\n", llm.ID, alias)
+			} else if existingCanonical, exists := c.llmAliasMap[alias]; exists {
+				if existingCanonical == llm.ID {
+					_, _ = fmt.Fprintf(os.Stderr, "Warning: LLM alias %q for LLM %s duplicates an existing alias or its own id, skipping\n", alias, llm.ID)
+				} else {
+					_, _ = fmt.Fprintf(os.Stderr, "Warning: LLM alias %q for LLM %s conflicts with existing id or alias for LLM %s, skipping\n", alias, llm.ID, existingCanonical)
+				}
+			} else {
+				c.llmAliasMap[alias] = llm.ID
+			}
+		}
+	}
+
 	// Validate default_llm if specified
 	if c.data.DefaultLLM != "" {
-		// Check that default_llm exists
-		if !llmIDs[c.data.DefaultLLM] {
+		// Check that default_llm exists (accepts both canonical IDs and aliases)
+		resolvedDefault := c.GetLLM(c.data.DefaultLLM)
+		if resolvedDefault == nil {
 			return fmt.Errorf("default_llm '%s' not found in llms list", c.data.DefaultLLM)
 		}
 
 		// Check that default_llm is enabled - if not, clear it and warn
-		for _, llm := range c.data.LLMs {
-			if llm.ID == c.data.DefaultLLM {
-				if !llm.Enabled {
-					_, _ = fmt.Fprintf(os.Stderr, "Warning: default_llm '%s' is not enabled - clearing default\n", c.data.DefaultLLM)
-					c.data.DefaultLLM = ""
-				}
-				break
-			}
+		if !resolvedDefault.Enabled {
+			_, _ = fmt.Fprintf(os.Stderr, "Warning: default_llm '%s' is not enabled - clearing default\n", c.data.DefaultLLM)
+			c.data.DefaultLLM = ""
 		}
 	}
 
@@ -755,10 +778,24 @@ func (c *Config) LLMs() []LLM {
 	return c.data.LLMs
 }
 
-// GetLLM returns an LLM by ID, or nil if not found
+// ResolveID resolves an LLM name (alias or canonical id) to the canonical id.
+// If the name is not found in the alias map, it is returned unchanged.
+func (c *Config) ResolveID(name string) string {
+	if c.llmAliasMap == nil {
+		return name
+	}
+	if canonical, ok := c.llmAliasMap[name]; ok {
+		return canonical
+	}
+	return name
+}
+
+// GetLLM returns an LLM by ID or alias, or nil if not found.
+// Aliases are resolved to the canonical id before lookup.
 func (c *Config) GetLLM(id string) *LLM {
+	canonical := c.ResolveID(id)
 	for i := range c.data.LLMs {
-		if c.data.LLMs[i].ID == id {
+		if c.data.LLMs[i].ID == canonical {
 			return &c.data.LLMs[i]
 		}
 	}
