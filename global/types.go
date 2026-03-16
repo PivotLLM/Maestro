@@ -238,7 +238,6 @@ type RunRequest struct {
 	Type     string `json:"type,omitempty"`    // Filter by task type
 	Parallel *bool  `json:"parallel"`          // Override taskset parallel setting (nil = use taskset setting)
 	Timeout  int    `json:"timeout,omitempty"` // LLM call timeout in seconds (min: 60, max: 1200, default: 600)
-	Wait     bool   `json:"wait,omitempty"`    // Wait for all tasks to complete before returning
 }
 
 // RunResult represents the result of a runner execution

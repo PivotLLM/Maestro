@@ -496,6 +496,9 @@ func (r *Runner) collectUniqueLLMs(tasks []*global.Task) []string {
 		if workerLLM == "" || workerLLM == "default" {
 			workerLLM = defaultLLM
 		}
+		if workerLLM != "" {
+			workerLLM = r.config.ResolveID(workerLLM)
+		}
 		if workerLLM != "" && !seen[workerLLM] {
 			seen[workerLLM] = true
 			llms = append(llms, workerLLM)
@@ -506,6 +509,9 @@ func (r *Runner) collectUniqueLLMs(tasks []*global.Task) []string {
 			qaLLM := task.QA.LLMModelID
 			if qaLLM == "" || qaLLM == "default" {
 				qaLLM = defaultLLM
+			}
+			if qaLLM != "" {
+				qaLLM = r.config.ResolveID(qaLLM)
 			}
 			if qaLLM != "" && !seen[qaLLM] {
 				seen[qaLLM] = true
@@ -715,23 +721,14 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunRe
 		timeout:       timeout,
 	}
 
-	if req.Wait {
-		// Synchronous execution - block until complete
-		result.Message = fmt.Sprintf("executing %d tasks synchronously", len(eligibleTasks))
-		r.activeRuns.Add(1)
+	// Async execution - return immediately
+	result.Message = fmt.Sprintf("%d tasks queued for execution", len(eligibleTasks))
+	r.activeRuns.Add(1)
+	go func() {
+		defer r.activeRuns.Done()
+		defer r.runningProjects.Delete(req.Project)
 		r.executeRun(execParams)
-		r.activeRuns.Done()
-		r.runningProjects.Delete(req.Project)
-	} else {
-		// Async execution - return immediately
-		result.Message = fmt.Sprintf("%d tasks queued for execution", len(eligibleTasks))
-		r.activeRuns.Add(1)
-		go func() {
-			defer r.activeRuns.Done()
-			defer r.runningProjects.Delete(req.Project)
-			r.executeRun(execParams)
-		}()
-	}
+	}()
 
 	return result, nil
 }
@@ -1095,6 +1092,8 @@ func (r *Runner) runParallel(ctx context.Context, project, path string, tasks []
 							}
 						}
 					}
+					// Resolve alias to canonical id so recovery state always stores canonical form
+					llmID = r.config.ResolveID(llmID)
 					llmConfig := r.llm.GetLLM(llmID)
 					if llmConfig != nil && llmConfig.RecoveryConfig != nil {
 						r.logger.Infof("Task %d: Failed - entering recovery mode for LLM %s", t.ID, llmID)
@@ -1220,6 +1219,8 @@ func (r *Runner) executeTaskWithRecovery(ctx context.Context, project, path stri
 				}
 			}
 		}
+		// Resolve alias to canonical id so recovery state always stores canonical form
+		llmID = r.config.ResolveID(llmID)
 
 		llmConfig := r.llm.GetLLM(llmID)
 		if llmConfig != nil && llmConfig.RecoveryConfig != nil {
@@ -1292,13 +1293,12 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 				return
 			}
 		}
-		// Store resolved LLM ID for result file
-		task.Work.LLMModelID = llmID
+	} else {
+		// Resolve alias to canonical id so logs and stored results always use canonical id
+		llmID = r.config.ResolveID(llmID)
 	}
-
-	// Log task start
-	r.logToProject(project, fmt.Sprintf("Task %d: Started, LLM: %s", task.ID, llmID))
-	r.logger.Infof("Task %d: Started, LLM: %s", task.ID, llmID)
+	// Store resolved canonical LLM ID for result file
+	task.Work.LLMModelID = llmID
 
 	// Update task metadata but keep status as 'waiting' until fully complete
 	// This ensures restarts will pick up interrupted tasks
@@ -1362,9 +1362,6 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	mode := "command"
 	promptInput := "args"
 	if execInfo != nil {
-		if execInfo.DisplayName != "" {
-			displayName = execInfo.DisplayName
-		}
 		mode = execInfo.Mode
 		promptInput = execInfo.PromptInput
 	}
@@ -2424,7 +2421,12 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 				return fmt.Errorf("no LLMs are enabled")
 			}
 		}
+	} else {
+		// Resolve alias to canonical id so logs and stored results always use canonical id
+		qaLLMID = r.config.ResolveID(qaLLMID)
 	}
+	// Store resolved canonical LLM ID back to task so results always record canonical form
+	task.QA.LLMModelID = qaLLMID
 
 	// Get exec info for detailed logging
 	qaExecInfo := r.llm.GetExecInfo(qaLLMID)
@@ -2432,9 +2434,6 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 	qaMode := "command"
 	qaPromptInput := "args"
 	if qaExecInfo != nil {
-		if qaExecInfo.DisplayName != "" {
-			qaDisplayName = qaExecInfo.DisplayName
-		}
 		qaMode = qaExecInfo.Mode
 		qaPromptInput = qaExecInfo.PromptInput
 	}
@@ -2598,6 +2597,9 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 
 	r.logger.Infof("Task %d: QA response parsed (verdict: %s)", task.ID, qaResult.Verdict)
 
+	// Store resolved canonical LLM ID for result file (mirrors worker/revision pattern)
+	task.QA.LLMModelID = qaLLMID
+
 	// Update task with QA results AND set work.status to done
 	// This is the final status update - task is now fully complete
 	qaUpdates = map[string]interface{}{
@@ -2605,10 +2607,11 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 			"status": global.ExecutionStatusDone, // Task fully complete after QA
 		},
 		"qa": map[string]interface{}{
-			"status":      global.ExecutionStatusDone,
-			"result":      qaResponse,
-			"verdict":     qaResult.Verdict,
-			"invocations": task.QA.Invocations,
+			"status":       global.ExecutionStatusDone,
+			"result":       qaResponse,
+			"verdict":      qaResult.Verdict,
+			"invocations":  task.QA.Invocations,
+			"llm_model_id": qaLLMID,
 		},
 	}
 
@@ -2866,9 +2869,12 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int
 				return fmt.Errorf("no LLMs are enabled")
 			}
 		}
-		// Store resolved LLM ID for result file
-		task.Work.LLMModelID = llmID
+	} else {
+		// Resolve alias to canonical id so logs and stored results always use canonical id
+		llmID = r.config.ResolveID(llmID)
 	}
+	// Store resolved canonical LLM ID for result file
+	task.Work.LLMModelID = llmID
 
 	// Build dispatch options with timeout if specified
 	var options *llm.DispatchOptions
@@ -2886,9 +2892,6 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int
 	revMode := "command"
 	revPromptInput := "args"
 	if revExecInfo != nil {
-		if revExecInfo.DisplayName != "" {
-			revDisplayName = revExecInfo.DisplayName
-		}
 		revMode = revExecInfo.Mode
 		revPromptInput = revExecInfo.PromptInput
 	}

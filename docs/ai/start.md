@@ -125,7 +125,7 @@ task_create(
   title="Analyze REQ-001",
   type="analysis",
   prompt="Analyze this requirement...",
-  llm_model_id="claude",    # Use LLM ID from config (e.g. "claude", "gpt", "gemini")
+  llm_model_id="claude",    # Use LLM ID from config (e.g. "claude", "codex", "gemini")
   qa_enabled=true,
   qa_llm_model_id="claude"  # Can be a different LLM for QA
 )
@@ -206,7 +206,7 @@ list_create_tasks(
   type="analysis",
   title_template="Analyze {{id}}",
   prompt="Analyze the following requirement...",
-  llm_model_id="claude"   # LLM ID from config (e.g. "claude", "gpt", "gemini")
+  llm_model_id="claude"   # LLM ID from config (e.g. "claude", "codex", "gemini")
 )
 ```
 
@@ -224,10 +224,14 @@ Maestro provides tools for managing and testing LLMs:
 ```
 # Test if an LLM is available before starting a long run
 llm_test(llm_id="claude")   # Claude Code (Anthropic)
-llm_test(llm_id="gpt")      # OpenAI Codex
+llm_test(llm_id="codex")    # OpenAI Codex
 llm_test(llm_id="gemini")   # Google Gemini CLI
 # Returns: { "available": true } or { "available": false, "error": "..." }
 ```
+
+**LLM Aliases**: Each LLM can have one or more aliases defined in the config (`"aliases": ["gpt"]`). Aliases resolve to the canonical `id` transparently — you can use either the id or any alias in `llm_model_id`, `llm_dispatch`, and `llm_test`. Results and logs always record the canonical id. Duplicate aliases produce a startup warning and are skipped.
+
+**CLI Path and Working Directory**: For command-type LLMs, Maestro resolves bare command names (e.g. `"claude"`, `"codex"`, `"gemini"`) using the system PATH plus any paths listed in `extra_path` in the config. All CLI agents run from the directory defined by `agents_dir` (default: `<base_dir>/agents`), which is created automatically on startup. A per-LLM `working_dir` override is also supported.
 
 **Error Handling**:
 - **Infrastructure errors** (command not found, timeout, permission denied): Counted against `max_retries`, no LLM cost

@@ -82,7 +82,6 @@ func NewService(cfg *config.Config, logger *logging.Logger, libraryService *libr
 //goland:noinspection GoNameStartsWithPackageName
 type LLMInfo struct {
 	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
 	Description string `json:"description"`
 	Enabled     bool   `json:"enabled"`
 }
@@ -92,7 +91,6 @@ type LLMInfo struct {
 //goland:noinspection GoNameStartsWithPackageName
 type LLMExecInfo struct {
 	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
 	Mode        string `json:"mode"`         // "command" (only mode currently)
 	PromptInput string `json:"prompt_input"` // "stdin" or "args"
 }
@@ -111,7 +109,6 @@ func (s *Service) ListLLMs() *LLMListResult {
 	for _, llm := range s.config.LLMs() {
 		llms = append(llms, LLMInfo{
 			ID:          llm.ID,
-			DisplayName: llm.DisplayName,
 			Description: llm.Description,
 			Enabled:     llm.Enabled,
 		})
@@ -124,7 +121,8 @@ func (s *Service) ListLLMs() *LLMListResult {
 
 // GetExecInfo returns execution details for an LLM (for logging)
 func (s *Service) GetExecInfo(llmID string) *LLMExecInfo {
-	llm, ok := s.llmConfig[llmID]
+	canonical := s.config.ResolveID(llmID)
+	llm, ok := s.llmConfig[canonical]
 	if !ok {
 		return nil
 	}
@@ -141,15 +139,16 @@ func (s *Service) GetExecInfo(llmID string) *LLMExecInfo {
 
 	return &LLMExecInfo{
 		ID:          llm.ID,
-		DisplayName: llm.DisplayName,
 		Mode:        mode,
 		PromptInput: promptInput,
 	}
 }
 
-// GetLLM returns the full LLM configuration for the given ID
+// GetLLM returns the full LLM configuration for the given ID or alias.
+// Aliases are resolved to the canonical id before lookup.
 func (s *Service) GetLLM(llmID string) *config.LLM {
-	llm, ok := s.llmConfig[llmID]
+	canonical := s.config.ResolveID(llmID)
+	llm, ok := s.llmConfig[canonical]
 	if !ok {
 		return nil
 	}
@@ -166,7 +165,9 @@ func (s *Service) validateRequest(req *DispatchRequest) (*config.LLM, error) {
 		return nil, fmt.Errorf("prompt is required")
 	}
 
-	llm, exists := s.llmConfig[req.LLMID]
+	// Resolve alias to canonical id before lookup
+	canonical := s.config.ResolveID(req.LLMID)
+	llm, exists := s.llmConfig[canonical]
 	if !exists {
 		return nil, fmt.Errorf("unknown LLM ID: %s", req.LLMID)
 	}
@@ -257,7 +258,8 @@ func (s *Service) Dispatch(req *DispatchRequest) (*DispatchResult, error) {
 // Returns (false, nil) if LLM is rate-limited or unavailable (exit code != 0)
 // Returns (false, error) if infrastructure error prevents test
 func (s *Service) TestLLM(llmID string) (bool, error) {
-	llm, exists := s.llmConfig[llmID]
+	canonical := s.config.ResolveID(llmID)
+	llm, exists := s.llmConfig[canonical]
 	if !exists {
 		return false, fmt.Errorf("unknown LLM ID: %s", llmID)
 	}
@@ -354,6 +356,13 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 	// This lets us kill the entire group — child AND all its grandchildren — with
 	// a single syscall.Kill(-pgid, SIGKILL), instead of only killing the direct child.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// Set working directory for the LLM process. This ensures the LLM runs in a
+	// known, trusted directory (important for tools like Gemini that restrict MCP
+	// server access based on the working directory).
+	if llm.WorkingDir != "" {
+		cmd.Dir = llm.WorkingDir
+	}
 
 	// WaitDelay is a safety net: if our process-group kill fails (e.g., a grandchild
 	// escaped the group via its own setsid) and a pipe-holding process is still running,

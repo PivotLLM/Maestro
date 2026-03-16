@@ -29,7 +29,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "test",
-						DisplayName: "Test LLM",
 						Type:        "command",
 						Command:     "/bin/echo",
 						Args:        []string{"{{PROMPT}}"},
@@ -63,7 +62,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "test-cmd",
-						DisplayName: "Test Command LLM",
 						Type:        "command",
 						Command:     "/bin/echo",
 						Args:        []string{"{{PROMPT}}"},
@@ -81,7 +79,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "test-cmd",
-						DisplayName: "Test Command LLM",
 						Type:        "command",
 						Command:     "/usr/bin/echo",
 						Args:        []string{"{{PROMPT}}"},
@@ -99,7 +96,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "test-cmd",
-						DisplayName: "Test Command LLM",
 						Type:        "command",
 						Command:     "/usr/bin/echo",
 						Args:        []string{"hello"},
@@ -117,7 +113,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "test-cmd",
-						DisplayName: "Test Command LLM",
 						Type:        "command",
 						Args:        []string{"{{PROMPT}}"},
 						Description: "Test command LLM",
@@ -134,7 +129,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "test-stdin",
-						DisplayName: "Test Stdin LLM",
 						Type:        "command",
 						Command:     "/bin/cat",
 						Args:        []string{},
@@ -153,7 +147,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "test",
-						DisplayName: "Test LLM",
 						Type:        "invalid",
 						Description: "Test LLM",
 					},
@@ -170,7 +163,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "claude",
-						DisplayName: "Claude",
 						Type:        "command",
 						Command:     "/bin/echo",
 						Args:        []string{"{{PROMPT}}"},
@@ -179,7 +171,6 @@ func TestValidate(t *testing.T) {
 					},
 					{
 						ID:          "gpt4",
-						DisplayName: "GPT-4",
 						Type:        "command",
 						Command:     "/bin/echo",
 						Args:        []string{"{{PROMPT}}"},
@@ -199,7 +190,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "claude",
-						DisplayName: "Claude",
 						Type:        "command",
 						Command:     "/bin/echo",
 						Args:        []string{"{{PROMPT}}"},
@@ -219,7 +209,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "claude",
-						DisplayName: "Claude",
 						Type:        "command",
 						Command:     "/bin/echo",
 						Args:        []string{"{{PROMPT}}"},
@@ -239,7 +228,6 @@ func TestValidate(t *testing.T) {
 				LLMs: []LLM{
 					{
 						ID:          "claude",
-						DisplayName: "Claude",
 						Type:        "command",
 						Command:     "/bin/echo",
 						Args:        []string{"{{PROMPT}}"},
@@ -351,8 +339,8 @@ func TestGetters(t *testing.T) {
 			BaseDir:    "/base/dir",
 			DefaultLLM: "llm1",
 			LLMs: []LLM{
-				{ID: "llm1", DisplayName: "LLM 1"},
-				{ID: "llm2", DisplayName: "LLM 2"},
+				{ID: "llm1"},
+				{ID: "llm2"},
 			},
 			Logging: Logging{
 				File:  "/var/log/maestro.log",
@@ -468,7 +456,7 @@ func TestDefaultLLMEmpty(t *testing.T) {
 			Version: 1,
 			BaseDir: "/base/dir",
 			LLMs: []LLM{
-				{ID: "llm1", DisplayName: "LLM 1"},
+				{ID: "llm1"},
 			},
 		},
 	}
