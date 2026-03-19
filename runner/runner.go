@@ -712,8 +712,10 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunRe
 	}
 
 	// Prepare execution parameters
+	// Use context.Background() so the goroutine is not cancelled when the MCP request context ends
+	// (e.g., when the stdio connection closes after returning the response)
 	execParams := &runExecutionParams{
-		ctx:           ctx,
+		ctx:           context.Background(),
 		req:           req,
 		taskSetList:   taskSetList,
 		eligibleTasks: eligibleTasks,
