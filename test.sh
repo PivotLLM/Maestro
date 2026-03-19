@@ -2380,16 +2380,25 @@ run_test "13.1.3 Create task with test-success LLM" \
 
 print_subsection "13.2 Run Success Task and Verify History"
 
-# Run task with wait:true for synchronous execution
-# Note: Task may fail schema validation but we're testing history capture, not validation
-run_test "13.2.1 Run success task (synchronous)" \
-    "task_run" \
-    "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"success-test\",\"wait\":true}" \
-    '"tasks_executed"'
+RUN_RESULT=$(call_tool "task_run" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"success-test\"}")
+echo "  13.2.1 Run success task"
+TASKS_FOUND_VAL=$(echo "$RUN_RESULT" | jq -r '.tasks_found // 0' 2>/dev/null)
+if echo "$RUN_RESULT" | grep -q '"tasks_found"' && [ "${TASKS_FOUND_VAL:-0}" -gt 0 ] 2>/dev/null; then
+    echo "    ${GREEN}PASS${NC}: tasks_found=$TASKS_FOUND_VAL"
+    PASS_COUNT=$((PASS_COUNT + 1))
+else
+    echo "    ${RED}FAIL${NC}: tasks_found=$TASKS_FOUND_VAL (response: $RUN_RESULT)"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
 
-# Find result file directly from results directory (avoids jq parse issues with embedded newlines)
+# Poll until result file appears (task runs asynchronously; allow up to 90s for rate limiter)
 echo "  13.2.2 Verify result file has history with exit_code=0"
-RESULT_FILE=$(ls "$TEST_DATA/projects/$LLM_TEST_PROJECT/results/"*.json 2>/dev/null | grep -v error | head -1)
+RESULT_FILE=""
+for i in $(seq 1 90); do
+    RESULT_FILE=$(ls "$TEST_DATA/projects/$LLM_TEST_PROJECT/results/"*.json 2>/dev/null | grep -v "\-error\.json" | head -1)
+    [ -n "$RESULT_FILE" ] && break
+    sleep 1
+done
 if [ -n "$RESULT_FILE" ] && [ -f "$RESULT_FILE" ]; then
     # Check for exit_code in history
     EXIT_CODE=$(jq '.history[] | select(.role=="worker" and .type=="response") | .exit_code' "$RESULT_FILE" 2>/dev/null | head -1)
@@ -2402,7 +2411,7 @@ if [ -n "$RESULT_FILE" ] && [ -f "$RESULT_FILE" ]; then
         FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
 else
-    echo "    ${RED}FAIL${NC}: Result file not found in $TEST_DATA/projects/$LLM_TEST_PROJECT/results/"
+    echo "    ${RED}FAIL${NC}: Result file not found after 30s in $TEST_DATA/projects/$LLM_TEST_PROJECT/results/"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 
@@ -2418,18 +2427,29 @@ run_test "13.3.2 Create task with test-stderr LLM" \
     "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\",\"title\":\"Test Stderr\",\"type\":\"test\",\"llm_model_id\":\"test-stderr\",\"prompt\":\"Test prompt\"}" \
     '"title":"Test Stderr"'
 
-# Run task with wait:true - it will fail after retries
-run_test "13.3.3 Run stderr task (synchronous)" \
-    "task_run" \
-    "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\",\"wait\":true}" \
-    '"tasks_failed"'
+STDERR_RUN_RESULT=$(call_tool "task_run" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\"}")
+echo "  13.3.3 Run stderr task"
+STDERR_TASKS_FOUND=$(echo "$STDERR_RUN_RESULT" | jq -r '.tasks_found // 0' 2>/dev/null)
+if echo "$STDERR_RUN_RESULT" | grep -q '"tasks_found"' && [ "${STDERR_TASKS_FOUND:-0}" -gt 0 ] 2>/dev/null; then
+    echo "    ${GREEN}PASS${NC}: tasks_found=$STDERR_TASKS_FOUND"
+    PASS_COUNT=$((PASS_COUNT + 1))
+else
+    echo "    ${RED}FAIL${NC}: tasks_found=$STDERR_TASKS_FOUND (response: $STDERR_RUN_RESULT)"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
 
-# Get task status to verify stderr is captured in error message
-STDERR_TASK_RESULT=$(call_tool "task_list" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\"}")
-STDERR_ERROR=$(echo "$STDERR_TASK_RESULT" | jq -r '.tasks[0].work.error // empty')
-STDERR_STATUS=$(echo "$STDERR_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
-
+# Poll until task reaches a terminal state (failed/done), then verify stderr captured
+# Allow up to 90s to account for rate limiter waits across concurrent test goroutines
 echo "  13.3.4 Verify stderr is captured in task error field"
+STDERR_STATUS=""
+STDERR_ERROR=""
+for i in $(seq 1 90); do
+    STDERR_TASK_RESULT=$(call_tool "task_list" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\"}")
+    STDERR_STATUS=$(echo "$STDERR_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
+    STDERR_ERROR=$(echo "$STDERR_TASK_RESULT" | jq -r '.tasks[0].work.error // empty')
+    [ "$STDERR_STATUS" = "failed" ] || [ "$STDERR_STATUS" = "done" ] && break
+    sleep 1
+done
 if [ "$STDERR_STATUS" = "failed" ] && echo "$STDERR_ERROR" | grep -q "stderr error message"; then
     echo "    ${GREEN}PASS${NC}: Task failed with stderr captured: '$STDERR_ERROR'"
     PASS_COUNT=$((PASS_COUNT + 1))
