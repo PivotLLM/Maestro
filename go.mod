@@ -1,11 +1,11 @@
 module github.com/PivotLLM/Maestro
 
-go 1.25.5
+go 1.26
 
 require (
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
-	github.com/mark3labs/mcp-go v0.45.0
+	github.com/mark3labs/mcp-go v0.46.0
 	github.com/tenebris-tech/x2md v0.0.3
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
@@ -18,5 +18,3 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 )
-
-replace github.com/mark3labs/mcp-go => /home/eric/source/mcp-go
