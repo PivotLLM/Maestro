@@ -165,7 +165,7 @@ func (s *Service) saveTaskSet(project, path string, taskSet *global.TaskSet) err
 }
 
 // CreateTaskSet creates a new task set at the given path
-func (s *Service) CreateTaskSet(project, path, title, description string, templates *global.DefaultTemplates, parallel bool, limits global.Limits) (*global.TaskSet, error) {
+func (s *Service) CreateTaskSet(project, path, title, description string, templates *global.DefaultTemplates, parallel bool, limits global.Limits, skipValidation bool, callbackURL string) (*global.TaskSet, error) {
 	// Validate inputs
 	if err := validatePath(path); err != nil {
 		return nil, fmt.Errorf("invalid path: %w", err)
@@ -193,14 +193,16 @@ func (s *Service) CreateTaskSet(project, path, title, description string, templa
 
 		now := time.Now()
 		taskSet = &global.TaskSet{
-			Path:        path,
-			Title:       title,
-			Description: description,
-			Parallel:    parallel,
-			Limits:      limits,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-			Tasks:       []global.Task{},
+			Path:           path,
+			Title:          title,
+			Description:    description,
+			Parallel:       parallel,
+			Limits:         limits,
+			SkipValidation: skipValidation,
+			CallbackURL:    callbackURL,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+			Tasks:          []global.Task{},
 		}
 
 		// Apply templates if provided
@@ -316,7 +318,7 @@ func (s *Service) ListTaskSets(project, pathPrefix string) (*TaskSetListResult, 
 }
 
 // UpdateTaskSet updates task set metadata
-func (s *Service) UpdateTaskSet(project, path string, title, description *string, templates *global.DefaultTemplates, parallel *bool, limits *global.Limits) (*global.TaskSet, error) {
+func (s *Service) UpdateTaskSet(project, path string, title, description *string, templates *global.DefaultTemplates, parallel *bool, limits *global.Limits, skipValidation *bool, callbackURL *string) (*global.TaskSet, error) {
 	if err := validatePath(path); err != nil {
 		return nil, fmt.Errorf("invalid path: %w", err)
 	}
@@ -358,6 +360,14 @@ func (s *Service) UpdateTaskSet(project, path string, title, description *string
 
 		if limits != nil {
 			taskSet.Limits = *limits
+		}
+
+		if skipValidation != nil {
+			taskSet.SkipValidation = *skipValidation
+		}
+
+		if callbackURL != nil {
+			taskSet.CallbackURL = *callbackURL
 		}
 
 		taskSet.UpdatedAt = time.Now()

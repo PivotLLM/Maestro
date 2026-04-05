@@ -86,6 +86,8 @@ type TaskSet struct {
 	QAReportTemplate       string    `json:"qa_report_template,omitempty"`
 	Parallel               bool      `json:"parallel"`
 	Limits                 Limits    `json:"limits,omitempty"` // Execution limits for tasks in this set
+	SkipValidation         bool      `json:"skip_validation,omitempty"`
+	CallbackURL            string    `json:"callback_url,omitempty"`
 	CreatedAt              time.Time `json:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at"`
 	Tasks                  []Task    `json:"tasks"`

@@ -81,6 +81,7 @@ const (
 	ToolTaskResults   = "task_results"
 	ToolTaskResultGet = "task_result_get"
 	ToolTaskReport    = "task_report"
+	ToolTaskDispatch  = "task_dispatch"
 
 	// MCP Tool Names - Supervisor
 	ToolSupervisorUpdate = "supervisor_update"

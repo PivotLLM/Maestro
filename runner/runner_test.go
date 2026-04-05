@@ -174,7 +174,7 @@ func TestGetTaskStatus(t *testing.T) {
 	}
 
 	// Create a task set
-	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", nil, false, global.Limits{})
+	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", nil, false, global.Limits{}, false, "")
 	if err != nil {
 		t.Fatalf("Failed to create task set: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestGetTaskStatusWithTypeFilter(t *testing.T) {
 	}
 
 	// Create a task set
-	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", nil, false, global.Limits{})
+	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", nil, false, global.Limits{}, false, "")
 	if err != nil {
 		t.Fatalf("Failed to create task set: %v", err)
 	}
@@ -334,7 +334,7 @@ func TestRunReturnsImmediately(t *testing.T) {
 	templates := createTestTemplates(t, tmpDir)
 
 	// Create a task set with templates
-	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", templates, false, global.Limits{})
+	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", templates, false, global.Limits{}, false, "")
 	if err != nil {
 		t.Fatalf("Failed to create task set: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestRunConcurrencyPrevention(t *testing.T) {
 	templates := createTestTemplates(t, tmpDir)
 
 	// Create a task set with templates
-	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", templates, false, global.Limits{})
+	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", templates, false, global.Limits{}, false, "")
 	if err != nil {
 		t.Fatalf("Failed to create task set: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestGetTaskStatusShowsRunInProgress(t *testing.T) {
 	templates := createTestTemplates(t, tmpDir)
 
 	// Create a task set with templates
-	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", templates, false, global.Limits{})
+	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", templates, false, global.Limits{}, false, "")
 	if err != nil {
 		t.Fatalf("Failed to create task set: %v", err)
 	}
@@ -527,7 +527,7 @@ func TestCreateTaskRequiresPromptField(t *testing.T) {
 	}
 
 	// Create a task set
-	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", nil, false, global.Limits{})
+	_, err = runner.tasks.CreateTaskSet(projectName, "main", "Main Tasks", "Test task set", nil, false, global.Limits{}, false, "")
 	if err != nil {
 		t.Fatalf("Failed to create task set: %v", err)
 	}
@@ -578,3 +578,149 @@ func TestCreateTaskRequiresPromptField(t *testing.T) {
 // NOTE: Crash recovery tests have been removed during the task set refactoring.
 // They tested the old project-based task system which no longer exists.
 // New crash recovery tests should be added when the runner is updated to use task sets.
+
+func TestRunDispatch_ProjectNotFound(t *testing.T) {
+	runner, tmpDir := setupTestRunner(t)
+	defer os.RemoveAll(tmpDir)
+
+	req := &DispatchRequest{
+		Project: "nonexistent-project",
+		Prompt:  "test prompt",
+	}
+
+	result, err := runner.RunDispatch(req)
+	if err == nil {
+		t.Error("Expected error for nonexistent project, got nil")
+	}
+	if result != nil {
+		t.Errorf("Expected nil result for nonexistent project, got %+v", result)
+	}
+}
+
+func TestRunDispatch_NoPrompt(t *testing.T) {
+	runner, tmpDir := setupTestRunner(t)
+	defer os.RemoveAll(tmpDir)
+
+	projectName := "test-project"
+
+	_, err := runner.projects.Create(projectName, "Test Project", "Test project for dispatch", "", "", "none")
+	if err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Dispatch with no prompt, instructions_text, or instructions_file
+	req := &DispatchRequest{
+		Project: projectName,
+		// No Prompt, InstructionsText, or InstructionsFile
+	}
+
+	// RunDispatch will succeed in creating the taskset but fail on CreateTask
+	// because work requires at least one prompt field.
+	result, err := runner.RunDispatch(req)
+	if err == nil {
+		t.Error("Expected error when dispatching with no prompt/instructions, got nil")
+	}
+	if result != nil {
+		t.Errorf("Expected nil result when no prompt provided, got %+v", result)
+	}
+}
+
+func TestCreateTaskSetWithSkipValidation(t *testing.T) {
+	runner, tmpDir := setupTestRunner(t)
+	defer os.RemoveAll(tmpDir)
+
+	projectName := "test-project"
+
+	_, err := runner.projects.Create(projectName, "Test Project", "Test project for skip validation", "", "", "none")
+	if err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	skipValidation := true
+	callbackURL := "http://example.com/cb"
+
+	taskSet, err := runner.tasks.CreateTaskSet(
+		projectName, "skip-val-set", "Skip Validation TaskSet", "test",
+		nil, false, global.Limits{}, skipValidation, callbackURL,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create task set with skip_validation: %v", err)
+	}
+
+	if !taskSet.SkipValidation {
+		t.Errorf("SkipValidation = false, want true")
+	}
+	if taskSet.CallbackURL != callbackURL {
+		t.Errorf("CallbackURL = %q, want %q", taskSet.CallbackURL, callbackURL)
+	}
+}
+
+func TestCreateTaskSetWithCallback(t *testing.T) {
+	runner, tmpDir := setupTestRunner(t)
+	defer os.RemoveAll(tmpDir)
+
+	projectName := "test-project"
+
+	_, err := runner.projects.Create(projectName, "Test Project", "Test project for callback persistence", "", "", "none")
+	if err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	callbackURL := "http://example.com/callback"
+
+	_, err = runner.tasks.CreateTaskSet(
+		projectName, "cb-persist-set", "Callback Persist TaskSet", "test",
+		nil, false, global.Limits{}, true, callbackURL,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create task set: %v", err)
+	}
+
+	// Get the task set to verify CallbackURL was persisted to disk
+	loaded, err := runner.tasks.GetTaskSet(projectName, "cb-persist-set")
+	if err != nil {
+		t.Fatalf("Failed to get task set: %v", err)
+	}
+
+	if loaded.CallbackURL != callbackURL {
+		t.Errorf("Persisted CallbackURL = %q, want %q", loaded.CallbackURL, callbackURL)
+	}
+	if !loaded.SkipValidation {
+		t.Errorf("Persisted SkipValidation = false, want true")
+	}
+}
+
+func TestUpdateTaskSetSkipValidation(t *testing.T) {
+	runner, tmpDir := setupTestRunner(t)
+	defer os.RemoveAll(tmpDir)
+
+	projectName := "test-project"
+
+	_, err := runner.projects.Create(projectName, "Test Project", "Test project for update skip validation", "", "", "none")
+	if err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Create task set without skip_validation
+	_, err = runner.tasks.CreateTaskSet(
+		projectName, "update-skip-set", "Update Skip TaskSet", "test",
+		nil, false, global.Limits{}, false, "",
+	)
+	if err != nil {
+		t.Fatalf("Failed to create task set: %v", err)
+	}
+
+	// Update with skip_validation=true
+	skipValidation := true
+	updated, err := runner.tasks.UpdateTaskSet(
+		projectName, "update-skip-set",
+		nil, nil, nil, nil, nil, &skipValidation, nil,
+	)
+	if err != nil {
+		t.Fatalf("Failed to update task set: %v", err)
+	}
+
+	if !updated.SkipValidation {
+		t.Errorf("After update: SkipValidation = false, want true")
+	}
+}

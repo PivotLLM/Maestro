@@ -6,9 +6,11 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,6 +30,7 @@ import (
 	"github.com/PivotLLM/Maestro/reporting"
 	"github.com/PivotLLM/Maestro/tasks"
 	"github.com/PivotLLM/Maestro/templates"
+	"github.com/google/uuid"
 )
 
 // Runner executes tasks via configured LLMs
@@ -616,24 +619,41 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunRe
 		return nil, fmt.Errorf("project not found: %s", req.Project)
 	}
 
-	// Validate disclaimer_template is configured
-	proj, err := r.projects.Get(req.Project)
+	// List task sets to determine if any require validation (i.e., have SkipValidation=false)
+	taskSetListForCheck, err := r.tasks.ListTaskSets(req.Project, req.Path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get project: %w", err)
+		return nil, fmt.Errorf("failed to list task sets: %w", err)
 	}
-	if proj.DisclaimerTemplate == "" {
-		return nil, fmt.Errorf("disclaimer_template is not configured for project %s: update project with disclaimer_template set to a playbook path or 'none'", req.Project)
-	}
-	// If "none", the report generation will use empty string (current behavior)
-	// If a path, validate the file exists before starting
-	if proj.DisclaimerTemplate != "none" {
-		parts := strings.SplitN(proj.DisclaimerTemplate, "/", 2)
-		if len(parts) < 2 {
-			return nil, fmt.Errorf("invalid disclaimer_template format: must be 'playbook-name/path/to/file.md', got: %s", proj.DisclaimerTemplate)
+
+	// Check if at least one taskset requires validation (SkipValidation=false)
+	requiresValidation := false
+	for _, ts := range taskSetListForCheck.TaskSets {
+		if !ts.SkipValidation {
+			requiresValidation = true
+			break
 		}
-		fullPath := filepath.Join(r.config.PlaybooksDir(), parts[0], parts[1])
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			return nil, fmt.Errorf("disclaimer template not found: %s", proj.DisclaimerTemplate)
+	}
+
+	// Only check disclaimer_template if at least one eligible taskset has SkipValidation=false
+	if requiresValidation {
+		proj, err := r.projects.Get(req.Project)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get project: %w", err)
+		}
+		if proj.DisclaimerTemplate == "" {
+			return nil, fmt.Errorf("disclaimer_template is not configured for project %s: update project with disclaimer_template set to a playbook path or 'none'", req.Project)
+		}
+		// If "none", the report generation will use empty string (current behavior)
+		// If a path, validate the file exists before starting
+		if proj.DisclaimerTemplate != "none" {
+			parts := strings.SplitN(proj.DisclaimerTemplate, "/", 2)
+			if len(parts) < 2 {
+				return nil, fmt.Errorf("invalid disclaimer_template format: must be 'playbook-name/path/to/file.md', got: %s", proj.DisclaimerTemplate)
+			}
+			fullPath := filepath.Join(r.config.PlaybooksDir(), parts[0], parts[1])
+			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+				return nil, fmt.Errorf("disclaimer template not found: %s", proj.DisclaimerTemplate)
+			}
 		}
 	}
 
@@ -655,9 +675,12 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunRe
 		return nil, fmt.Errorf("failed to list task sets: %w", err)
 	}
 
-	// Validate templates for all task sets before starting
+	// Validate templates for task sets where SkipValidation=false
 	var templateErrors []string
 	for _, taskSet := range taskSetList.TaskSets {
+		if taskSet.SkipValidation {
+			continue
+		}
 		errors := r.validateTaskSetTemplates(req.Project, taskSet)
 		for _, e := range errors {
 			templateErrors = append(templateErrors, fmt.Sprintf("task set '%s': %s", taskSet.Path, e))
@@ -819,9 +842,27 @@ func (r *Runner) executeRun(params *runExecutionParams) {
 	}
 	r.logToProject(params.req.Project, completionMsg)
 
-	// Auto-generate report after run completes
-	if _, err := r.generateAndSaveReport(params.req.Project, params.req.Path); err != nil {
-		r.logger.Errorf("Failed to generate report for project %s: %v", params.req.Project, err)
+	// Determine if any taskset requires report generation (has SkipValidation=false)
+	needsReport := false
+	for _, ts := range params.taskSetList.TaskSets {
+		if !ts.SkipValidation {
+			needsReport = true
+			break
+		}
+	}
+
+	// Auto-generate report only for tasksets with SkipValidation=false
+	if needsReport {
+		if _, err := r.generateAndSaveReport(params.req.Project, params.req.Path); err != nil {
+			r.logger.Errorf("Failed to generate report for project %s: %v", params.req.Project, err)
+		}
+	}
+
+	// Fire callbacks for any taskset with a non-empty CallbackURL
+	for _, ts := range params.taskSetList.TaskSets {
+		if ts.CallbackURL != "" {
+			r.sendCallback(params.req.Project, ts, "")
+		}
 	}
 }
 
@@ -1816,8 +1857,8 @@ func (r *Runner) finishTask(project, path string, task *global.Task, response, e
 		// Extract JSON from response (handles markdown code fences and LLM wrapper)
 		response = templates.ExtractJSON(response)
 
-		// Validate response against task set schema if configured
-		if taskSet, err := r.tasks.GetTaskSet(project, path); err == nil && taskSet.WorkerResponseTemplate != "" {
+		// Validate response against task set schema if configured (skip if SkipValidation=true)
+		if taskSet, err := r.tasks.GetTaskSet(project, path); err == nil && taskSet.WorkerResponseTemplate != "" && !taskSet.SkipValidation {
 			schema := r.loadSchemaContent(project, taskSet.WorkerResponseTemplate)
 			if schema != "" {
 				validationResult, validationErr := r.validator.ValidateJSON([]byte(response), schema)
@@ -3169,4 +3210,196 @@ func (r *Runner) generateAndSaveReport(project, pathFilter string) ([]string, er
 	r.logToProject(project, fmt.Sprintf("Report generation complete: %d report(s) written", len(generatedReports)))
 
 	return generatedReports, nil
+}
+
+// callbackTask represents a single task's status in a callback payload
+type callbackTask struct {
+	ID         int    `json:"id"`
+	UUID       string `json:"uuid"`
+	Title      string `json:"title"`
+	Status     string `json:"status"`
+	ResultFile string `json:"result_file"`
+}
+
+// callbackPayload is the JSON body sent to a callback URL
+type callbackPayload struct {
+	Project     string         `json:"project"`
+	Path        string         `json:"path"`
+	Description string         `json:"description,omitempty"`
+	CompletedAt time.Time      `json:"completed_at"`
+	Tasks       []callbackTask `json:"tasks"`
+}
+
+// sendCallback fires a POST callback to the taskset's CallbackURL with final task statuses.
+// description is the caller-supplied dispatch description (empty for non-dispatch runs).
+// Errors are logged but do not affect execution (fire and forget).
+func (r *Runner) sendCallback(project string, ts *global.TaskSet, description string) {
+	// Reload the taskset from disk to get final per-task statuses
+	reloaded, err := r.tasks.GetTaskSet(project, ts.Path)
+	if err != nil {
+		r.logger.Errorf("Callback: failed to reload taskset %s for project %s: %v", ts.Path, project, err)
+		return
+	}
+
+	payload := callbackPayload{
+		Project:     project,
+		Path:        reloaded.Path,
+		Description: description,
+		CompletedAt: time.Now(),
+		Tasks:       make([]callbackTask, 0, len(reloaded.Tasks)),
+	}
+
+	for _, task := range reloaded.Tasks {
+		payload.Tasks = append(payload.Tasks, callbackTask{
+			ID:         task.ID,
+			UUID:       task.UUID,
+			Title:      task.Title,
+			Status:     task.Work.Status,
+			ResultFile: "results/" + task.UUID + ".json",
+		})
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		r.logger.Errorf("Callback: failed to marshal payload for taskset %s: %v", ts.Path, err)
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Post(ts.CallbackURL, "application/json", bytes.NewReader(data))
+	if err != nil {
+		r.logger.Errorf("Callback: POST to %s failed: %v", ts.CallbackURL, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		r.logger.Warnf("Callback: POST to %s returned status %d", ts.CallbackURL, resp.StatusCode)
+	} else {
+		r.logger.Infof("Callback: POST to %s returned status %d", ts.CallbackURL, resp.StatusCode)
+	}
+}
+
+// DispatchRequest holds parameters for a single-task fire-and-forget dispatch
+type DispatchRequest struct {
+	Project                string
+	Path                   string // auto-generate "dispatch/<uuid8>" if empty
+	Title                  string // default "Dispatched task" if empty
+	LLMModelID             string
+	Prompt                 string
+	InstructionsText       string
+	InstructionsFile       string
+	InstructionsFileSource string
+	CallbackURL            string
+	Description            string // caller-supplied description echoed in callback payload
+	Timeout                int
+}
+
+// DispatchResult is returned immediately from RunDispatch
+type DispatchResult struct {
+	Project    string `json:"project"`
+	Path       string `json:"path"`
+	UUID       string `json:"uuid"`
+	Title      string `json:"title"`
+	Status     string `json:"status"`
+	ResultFile string `json:"result_file"`
+	Message    string `json:"message"`
+}
+
+// RunDispatch creates a single-task taskset and executes it asynchronously.
+// Returns immediately with status "running". Fires a callback when complete if CallbackURL is set.
+// Dispatches run concurrently with regular runs and other dispatches.
+func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
+	// Validate project exists
+	if !r.tasks.ProjectExists(req.Project) {
+		return nil, fmt.Errorf("project not found: %s", req.Project)
+	}
+
+	// Auto-generate path if not provided
+	path := req.Path
+	if path == "" {
+		id := uuid.New().String()
+		path = "dispatch/" + id[:8]
+	}
+
+	// Default title
+	title := req.Title
+	if title == "" {
+		title = "Dispatched task"
+	}
+
+	// Validate timeout
+	timeout, err := global.ValidateTimeout(req.Timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create taskset with SkipValidation=true
+	_, err = r.tasks.CreateTaskSet(req.Project, path, title, "", nil, false, global.Limits{}, true, req.CallbackURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dispatch taskset: %w", err)
+	}
+
+	// Create the single task
+	work := &global.WorkExecution{
+		Prompt:                 req.Prompt,
+		InstructionsText:       req.InstructionsText,
+		InstructionsFile:       req.InstructionsFile,
+		InstructionsFileSource: req.InstructionsFileSource,
+		LLMModelID:             req.LLMModelID,
+		Status:                 global.ExecutionStatusWaiting,
+	}
+
+	task, err := r.tasks.CreateTask(req.Project, path, title, "", work, nil)
+	if err != nil {
+		// Clean up taskset on task creation failure
+		_ = r.tasks.DeleteTaskSet(req.Project, path)
+		return nil, fmt.Errorf("failed to create dispatch task: %w", err)
+	}
+
+	result := &DispatchResult{
+		Project:    req.Project,
+		Path:       path,
+		UUID:       task.UUID,
+		Title:      title,
+		Status:     "running",
+		ResultFile: "results/" + task.UUID + ".json",
+		Message:    "Task dispatched and running asynchronously",
+	}
+
+	// Get the taskset for the goroutine (needed to fire callback)
+	callbackURL := req.CallbackURL
+
+	// Execute asynchronously - does NOT use runningProjects lock so dispatches
+	// run concurrently with regular runs and other dispatches
+	r.activeRuns.Add(1)
+	go func() {
+		defer r.activeRuns.Done()
+
+		// Load the task (fresh from disk)
+		taskInfo, taskSetPath, err := r.tasks.GetTask(req.Project, task.UUID)
+		if err != nil {
+			r.logger.Errorf("Dispatch: failed to load task %s: %v", task.UUID, err)
+			return
+		}
+
+		// Use default limits for dispatch tasks
+		limits := r.config.Runner().Limits.WithDefaults()
+		budget := r.newRunBudget([]*global.Task{taskInfo}, limits, 0.10)
+		localResult := &global.RunResult{}
+
+		r.executeTask(context.Background(), req.Project, taskSetPath, taskInfo, localResult, timeout, budget, limits)
+
+		// Fire callback if configured
+		if callbackURL != "" {
+			ts, err := r.tasks.GetTaskSet(req.Project, path)
+			if err != nil {
+				r.logger.Errorf("Dispatch: failed to load taskset for callback: %v", err)
+				return
+			}
+			r.sendCallback(req.Project, ts, req.Description)
+		}
+	}()
+
+	return result, nil
 }

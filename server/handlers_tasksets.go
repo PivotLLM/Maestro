@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/PivotLLM/Maestro/global"
+	"github.com/PivotLLM/Maestro/runner"
 	templatespkg "github.com/PivotLLM/Maestro/templates"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -79,7 +80,10 @@ func (s *Server) handleTaskSetCreate(_ context.Context, req mcp.CallToolRequest)
 		}
 	}
 
-	taskSet, err := s.tasks.CreateTaskSet(project, path, title, description, templates, parallel, limits)
+	skipValidation := mcp.ParseBoolean(req, "skip_validation", false)
+	callbackURL := mcp.ParseString(req, "callback_url", "")
+
+	taskSet, err := s.tasks.CreateTaskSet(project, path, title, description, templates, parallel, limits, skipValidation, callbackURL)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -205,7 +209,22 @@ func (s *Server) handleTaskSetUpdate(_ context.Context, req mcp.CallToolRequest)
 		}
 	}
 
-	taskSet, err := s.tasks.UpdateTaskSet(project, path, title, description, templates, parallel, limits)
+	// Handle skip_validation update
+	var skipValidation *bool
+	skipValidationStr := mcp.ParseString(req, "skip_validation", "")
+	if skipValidationStr != "" {
+		skipValidationVal := skipValidationStr == "true"
+		skipValidation = &skipValidationVal
+	}
+
+	// Handle callback_url update
+	var callbackURL *string
+	callbackURLStr := mcp.ParseString(req, "callback_url", "")
+	if callbackURLStr != "" {
+		callbackURL = &callbackURLStr
+	}
+
+	taskSet, err := s.tasks.UpdateTaskSet(project, path, title, description, templates, parallel, limits, skipValidation, callbackURL)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -665,4 +684,52 @@ func (s *Server) loadSchemaContent(schemaPath string) string {
 	// Cannot load from project files at task set creation time
 	// (we don't have project context yet, and project files may not exist)
 	return ""
+}
+
+// handleTaskDispatch handles the task_dispatch MCP tool.
+// Creates a single-task taskset and runs it asynchronously, returning immediately.
+func (s *Server) handleTaskDispatch(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	project := mcp.ParseString(req, "project", "")
+	path := mcp.ParseString(req, "path", "")
+	title := mcp.ParseString(req, "title", "")
+	llmModelID := mcp.ParseString(req, "llm_model_id", "")
+	prompt := mcp.ParseString(req, "prompt", "")
+	instructionsText := mcp.ParseString(req, "instructions_text", "")
+	instructionsFile := mcp.ParseString(req, "instructions_file", "")
+	instructionsFileSource := mcp.ParseString(req, "instructions_file_source", "")
+	callbackURL := mcp.ParseString(req, "callback_url", "")
+	description := mcp.ParseString(req, "description", "")
+	timeout := int(mcp.ParseFloat64(req, "timeout", 0))
+
+	s.logToolCall(global.ToolTaskDispatch, map[string]string{"project": project, "path": path})
+
+	if project == "" {
+		return mcp.NewToolResultError("project is required"), nil
+	}
+
+	// At least one prompt source is required
+	if prompt == "" && instructionsText == "" && instructionsFile == "" {
+		return mcp.NewToolResultError("at least one of prompt, instructions_text, or instructions_file is required"), nil
+	}
+
+	dispatchReq := &runner.DispatchRequest{
+		Project:                project,
+		Path:                   path,
+		Title:                  title,
+		LLMModelID:             llmModelID,
+		Prompt:                 prompt,
+		InstructionsText:       instructionsText,
+		InstructionsFile:       instructionsFile,
+		InstructionsFileSource: instructionsFileSource,
+		CallbackURL:            callbackURL,
+		Description:            description,
+		Timeout:                timeout,
+	}
+
+	result, err := s.runner.RunDispatch(dispatchReq)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return createJSONResult(result)
 }
