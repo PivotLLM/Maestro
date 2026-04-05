@@ -982,7 +982,7 @@ func (s *Service) SearchItems(source, project, playbook, listName, query, source
 type TaskCreator interface {
 	CreateTask(project, path, title, taskType string, work *global.WorkExecution, qa *global.QAExecution) (*global.Task, error)
 	GetTaskSet(project, path string) (*global.TaskSet, error)
-	CreateTaskSet(project, path, title, description string, templates *global.DefaultTemplates, parallel bool, limits global.Limits) (*global.TaskSet, error)
+	CreateTaskSet(project, path, title, description string, templates *global.DefaultTemplates, parallel bool, limits global.Limits, skipValidation bool, callbackURL string) (*global.TaskSet, error)
 }
 
 // CreateTasks creates tasks from list items.
@@ -1032,6 +1032,8 @@ func (s *Service) CreateTasks(
 			list.Templates,
 			parallel,
 			global.Limits{}, // use defaults
+			false,           // skipValidation
+			"",              // callbackURL
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create task set: %w", err)

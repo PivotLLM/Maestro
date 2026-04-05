@@ -22,8 +22,10 @@
 #   10.x.x - Error Handling & Edge Cases
 #   11.x.x - List Management Tools
 #   12.x.x - Chroot Security Tests
-#   14.x.x - Report Tools
-#   15.x.x - Cleanup & Final Verification
+#   13.x.x - TaskSet & Task Dispatch Tools
+#   16.x.x - LLM History Capture Tests
+#   17.x.x - Report Tools
+#   18.x.x - Cleanup & Final Verification
 
 #===============================================================================
 # Configuration
@@ -106,7 +108,7 @@ SKIP_COUNT=0
 echo ""
 echo "${BOLD}============================================${NC}"
 echo "${BOLD}   Maestro Comprehensive Test Suite${NC}"
-echo "${BOLD}   Testing all 76 MCP tools${NC}"
+echo "${BOLD}   Testing all 78 MCP tools${NC}"
 echo "${BOLD}============================================${NC}"
 echo ""
 
@@ -2352,10 +2354,322 @@ else
 fi
 
 #===============================================================================
-# SECTION 13: LLM History Capture Tests
+# SECTION 13: TaskSet & Task Dispatch Tools
 #===============================================================================
 
-print_section "SECTION 13: LLM History Capture" "Verify stdout, stderr, exit_code are captured in task results"
+print_section "SECTION 13: TaskSet & Task Dispatch Tools" "Tools: taskset_create/get/list/update/reset/delete, task_create/get/list/update, task_dispatch"
+
+# Variables for section 13 tests
+TEST_TASKSET_PATH="test-taskset"
+TEST_TASKSET2_PATH="test-taskset-skip"
+TEST_TASK_UUID=""
+
+print_subsection "13.1 taskset_create"
+
+run_test "13.1.1 Create basic taskset" \
+    "taskset_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Test TaskSet\",\"description\":\"A test task set\"}" \
+    '"path":"test-taskset"'
+
+run_test "13.1.2 Create taskset with skip_validation and callback_url" \
+    "taskset_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET2_PATH\",\"title\":\"Skip Validation TaskSet\",\"skip_validation\":true,\"callback_url\":\"http://example.com/cb\"}" \
+    '"skip_validation":true'
+
+run_test_expect_fail "13.1.3 Error - create taskset with missing project" \
+    "taskset_create" \
+    "{\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Missing Project\"}" \
+    "required"
+
+run_test_expect_fail "13.1.4 Error - create taskset with missing path" \
+    "taskset_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"title\":\"Missing Path\"}" \
+    "required"
+
+run_test_expect_fail "13.1.5 Error - create taskset with missing title" \
+    "taskset_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"no-title-set\"}" \
+    ""
+
+run_test_expect_fail "13.1.6 Error - create duplicate taskset" \
+    "taskset_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Duplicate\"}" \
+    "already exists"
+
+print_subsection "13.2 taskset_get"
+
+run_test "13.2.1 Get taskset created in 13.1.1" \
+    "taskset_get" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\"}" \
+    '"title":"Test TaskSet"'
+
+run_test_expect_fail "13.2.2 Error - get non-existent taskset" \
+    "taskset_get" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"nonexistent-taskset\"}" \
+    "not found"
+
+print_subsection "13.3 taskset_list"
+
+run_test "13.3.1 List tasksets for project - verify total >= 1" \
+    "taskset_list" \
+    "{\"project\":\"$TEST_PROJECT\"}" \
+    '"total":'
+
+run_test "13.3.2 List tasksets with path prefix filter" \
+    "taskset_list" \
+    "{\"project\":\"$TEST_PROJECT\",\"path_prefix\":\"test-taskset\"}" \
+    '"path":"test-taskset"'
+
+print_subsection "13.4 taskset_update"
+
+run_test "13.4.1 Update title of taskset from 13.1.1" \
+    "taskset_update" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Updated TaskSet Title\"}" \
+    '"title":"Updated TaskSet Title"'
+
+run_test "13.4.2 Update callback_url on a taskset" \
+    "taskset_update" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"callback_url\":\"http://example.com/updated\"}" \
+    '"callback_url"'
+
+run_test_expect_fail "13.4.3 Error - update non-existent taskset" \
+    "taskset_update" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"nonexistent-taskset\",\"title\":\"Won't work\"}" \
+    "not found"
+
+print_subsection "13.5 task_create"
+
+echo "  13.5.0 Creating task to capture UUID"
+TASK_CAPTURE_RESULT=$($PROBE -stdio $MAESTRO -env $ENV -call "task_create" -params "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Dispatch Test Task\",\"type\":\"test\",\"prompt\":\"Test dispatch prompt\"}" 2>&1)
+if echo "$TASK_CAPTURE_RESULT" | grep -q "Tool call succeeded"; then
+    TEST_TASK_UUID=$(echo "$TASK_CAPTURE_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
+    if [ -n "$TEST_TASK_UUID" ]; then
+        echo "    ${GREEN}PASS${NC}: Task created, UUID=$TEST_TASK_UUID"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    else
+        echo "    ${RED}FAIL${NC}: Task created but UUID not extracted"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+else
+    echo "    ${RED}FAIL${NC}: Failed to create task"
+    echo "    Output: $TASK_CAPTURE_RESULT"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
+run_test "13.5.1 Create a task with prompt (verify in taskset)" \
+    "task_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Second Task\",\"type\":\"test\",\"prompt\":\"Second task prompt\"}" \
+    '"title":"Second Task"'
+
+run_test "13.5.2 Create a task with instructions_text" \
+    "task_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Instructions Task\",\"type\":\"test\",\"instructions_text\":\"Inline instructions text\"}" \
+    '"title":"Instructions Task"'
+
+run_test_expect_fail "13.5.3 Error - create task with missing project" \
+    "task_create" \
+    "{\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"No Project\",\"prompt\":\"test\"}" \
+    "required"
+
+run_test_expect_fail "13.5.4 Error - create task with missing path" \
+    "task_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"title\":\"No Path\",\"prompt\":\"test\"}" \
+    "required"
+
+run_test_expect_fail "13.5.5 Error - create task with missing title" \
+    "task_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"prompt\":\"test\"}" \
+    ""
+
+run_test_expect_fail "13.5.6 Error - create task with no prompt/instructions" \
+    "task_create" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"No Prompt Task\",\"type\":\"test\"}" \
+    "prompt"
+
+print_subsection "13.6 task_get"
+
+run_test "13.6.1 Get task by UUID from 13.5.0" \
+    "task_get" \
+    "{\"project\":\"$TEST_PROJECT\",\"uuid\":\"$TEST_TASK_UUID\"}" \
+    '"task":'
+
+run_test "13.6.2 Get task by path and id" \
+    "task_get" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"id\":1}" \
+    '"title":'
+
+run_test_expect_fail "13.6.3 Error - get non-existent UUID" \
+    "task_get" \
+    "{\"project\":\"$TEST_PROJECT\",\"uuid\":\"00000000-0000-0000-0000-000000000000\"}" \
+    "not found"
+
+print_subsection "13.7 task_list"
+
+run_test "13.7.1 List tasks in taskset - verify total >= 1" \
+    "task_list" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\"}" \
+    '"total":'
+
+run_test "13.7.2 List tasks with status filter" \
+    "task_list" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"status\":\"waiting\"}" \
+    '"status":"waiting"'
+
+print_subsection "13.8 task_update"
+
+run_test "13.8.1 Update task title" \
+    "task_update" \
+    "{\"project\":\"$TEST_PROJECT\",\"uuid\":\"$TEST_TASK_UUID\",\"title\":\"Updated Dispatch Task\"}" \
+    '"title":"Updated Dispatch Task"'
+
+run_test_expect_fail "13.8.2 Error - update task with missing uuid" \
+    "task_update" \
+    "{\"project\":\"$TEST_PROJECT\",\"title\":\"No UUID\"}" \
+    ""
+
+print_subsection "13.9 taskset_reset"
+
+run_test "13.9.1 Reset taskset with mode=all - verify tasks_reset count" \
+    "taskset_reset" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"mode\":\"all\"}" \
+    '"tasks_reset":'
+
+run_test_expect_fail "13.9.2 Error - reset taskset without mode parameter" \
+    "taskset_reset" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\"}" \
+    "mode is required"
+
+print_subsection "13.10 task_dispatch"
+
+run_test_expect_fail "13.10.1 Dispatch with missing project - expect error" \
+    "task_dispatch" \
+    "{\"prompt\":\"Test prompt\",\"llm_model_id\":\"nonexistent-llm\"}" \
+    "project"
+
+run_test_expect_fail "13.10.2 Dispatch with no prompt/instructions - expect error" \
+    "task_dispatch" \
+    "{\"project\":\"$TEST_PROJECT\",\"llm_model_id\":\"nonexistent-llm\"}" \
+    "prompt"
+
+run_test "13.10.3 Dispatch with valid prompt returns running status and uuid" \
+    "task_dispatch" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"dispatch-test\",\"title\":\"Test Dispatch\",\"prompt\":\"Test dispatch prompt\",\"llm_model_id\":\"nonexistent-llm\"}" \
+    '"status":"running"'
+
+run_test "13.10.4 Dispatch with auto-generated path" \
+    "task_dispatch" \
+    "{\"project\":\"$TEST_PROJECT\",\"prompt\":\"Auto path test\",\"llm_model_id\":\"nonexistent-llm\"}" \
+    '"path":"dispatch/'
+
+run_test "13.10.5 Dispatch with callback_url - verify uuid returned" \
+    "task_dispatch" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"dispatch-cb-test\",\"title\":\"Callback Test\",\"prompt\":\"Callback dispatch\",\"llm_model_id\":\"nonexistent-llm\",\"callback_url\":\"http://example.com/notify\"}" \
+    '"uuid":'
+
+# 13.10.6: End-to-end — dispatch a task with a real LLM (test-success) and verify callback fires
+echo "  13.10.6 End-to-end: dispatch completes and callback POST fires"
+CB_PORT=19878
+CB_FILE="/tmp/maestro-cb-e2e-$$.json"
+rm -f "$CB_FILE"
+
+# Start a one-shot HTTP listener that writes the POST body to CB_FILE then exits
+python3 -c "
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        n = int(self.headers.get('Content-Length', 0))
+        b = self.rfile.read(n)
+        open('$CB_FILE', 'wb').write(b)
+        self.send_response(200)
+        self.end_headers()
+    def log_message(self, *a): pass
+http.server.HTTPServer(('127.0.0.1', $CB_PORT), H).handle_request()
+" &
+CB_LISTENER_PID=$!
+sleep 1
+
+CB_DISPATCH=$($PROBE -stdio $MAESTRO -env $ENV -call "task_dispatch" \
+    -params "{\"project\":\"$TEST_PROJECT\",\"path\":\"dispatch-cb-e2e\",\"title\":\"E2E Callback\",\"prompt\":\"Hello\",\"llm_model_id\":\"test-success\",\"callback_url\":\"http://127.0.0.1:$CB_PORT/cb\"}" 2>&1)
+
+if echo "$CB_DISPATCH" | grep -q '"status":"running"'; then
+    # Poll up to 30 seconds for the callback file to appear
+    CB_WAITED=0
+    while [ "$CB_WAITED" -lt 30 ]; do
+        [ -f "$CB_FILE" ] && break
+        sleep 1
+        CB_WAITED=$((CB_WAITED + 1))
+    done
+
+    if [ -f "$CB_FILE" ]; then
+        CB_PAYLOAD=$(cat "$CB_FILE")
+        CB_OK=true
+        echo "$CB_PAYLOAD" | grep -q "\"project\""   || CB_OK=false
+        echo "$CB_PAYLOAD" | grep -q "\"path\""      || CB_OK=false
+        echo "$CB_PAYLOAD" | grep -q "\"uuid\""      || CB_OK=false
+        echo "$CB_PAYLOAD" | grep -q "\"status\""    || CB_OK=false
+        echo "$CB_PAYLOAD" | grep -q "\"result_file\"" || CB_OK=false
+        echo "$CB_PAYLOAD" | grep -q "$TEST_PROJECT" || CB_OK=false
+
+        if [ "$CB_OK" = "true" ]; then
+            echo "    ${GREEN}PASS${NC}: Callback received with correct payload (project, path, uuid, status, result_file)"
+            PASS_COUNT=$((PASS_COUNT + 1))
+        else
+            echo "    ${RED}FAIL${NC}: Callback payload missing expected fields"
+            echo "    Payload: $CB_PAYLOAD"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+        fi
+    else
+        echo "    ${RED}FAIL${NC}: Callback not received within 30s"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+else
+    echo "    ${RED}FAIL${NC}: task_dispatch did not return running status"
+    echo "    Output: $CB_DISPATCH"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
+kill "$CB_LISTENER_PID" 2>/dev/null
+rm -f "$CB_FILE"
+
+print_subsection "13.11 taskset_delete"
+
+run_test "13.11.1 Delete taskset from 13.1.1" \
+    "taskset_delete" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\"}" \
+    '"deleted":true'
+
+run_test_expect_fail "13.11.2 Verify deleted taskset is gone" \
+    "taskset_get" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\"}" \
+    "not found"
+
+run_test_expect_fail "13.11.3 Error - delete non-existent taskset" \
+    "taskset_delete" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"nonexistent-taskset\"}" \
+    "not found"
+
+# Clean up remaining tasksets created in section 13
+cleanup_silent "taskset_delete" "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET2_PATH\"}"
+cleanup_silent "taskset_delete" "{\"project\":\"$TEST_PROJECT\",\"path\":\"dispatch-test\"}"
+cleanup_silent "taskset_delete" "{\"project\":\"$TEST_PROJECT\",\"path\":\"dispatch-cb-test\"}"
+cleanup_silent "taskset_delete" "{\"project\":\"$TEST_PROJECT\",\"path\":\"dispatch-cb-e2e\"}"
+
+# Clean up auto-generated dispatch/* tasksets from 13.10.4 (path is unknown; delete via filesystem)
+echo "  13.11.4 Cleanup auto-generated dispatch tasksets"
+for f in "$TEST_DATA/projects/$TEST_PROJECT/tasks/dispatch"__*.json; do
+    [ -f "$f" ] || continue
+    fname=$(basename "$f" .json)
+    tpath=$(echo "$fname" | sed 's/__/\//g')
+    cleanup_silent "taskset_delete" "{\"project\":\"$TEST_PROJECT\",\"path\":\"$tpath\"}"
+done
+echo "    ${GREEN}PASS${NC}: Auto-generated dispatch tasksets cleaned up"
+PASS_COUNT=$((PASS_COUNT + 1))
+
+#===============================================================================
+# SECTION 16: LLM History Capture Tests
+#===============================================================================
+
+print_section "SECTION 16: LLM History Capture" "Verify stdout, stderr, exit_code are captured in task results"
 
 print_subsection "13.1 Setup Test Project for LLM Testing"
 
@@ -2510,10 +2824,10 @@ if [ "$PRESERVE_TEST_DIR" = false ]; then
 fi
 
 #===============================================================================
-# SECTION 14: Report Tools
+# SECTION 17: Report Tools
 #===============================================================================
 
-print_section "SECTION 14: Report Tools" "Tools: report_start, report_append, report_end, report_list, report_read"
+print_section "SECTION 17: Report Tools" "Tools: report_start, report_append, report_end, report_list, report_read"
 
 print_subsection "14.1 Report Session Management"
 
@@ -2742,50 +3056,50 @@ run_test "14.8.9 Delete supervisor-test taskset" \
     '"deleted":true'
 
 #===============================================================================
-# SECTION 15: Cleanup & Final Verification
+# SECTION 18: Cleanup & Final Verification
 #===============================================================================
 
-print_section "SECTION 15: Cleanup & Verification" "Final cleanup and verification"
+print_section "SECTION 18: Cleanup & Verification" "Final cleanup and verification"
 
-print_subsection "15.1 Verify Tasks Cleaned Up"
-run_test "15.1.1 Verify no task sets remaining" \
+print_subsection "18.1 Verify Tasks Cleaned Up"
+run_test "18.1.1 Verify no task sets remaining" \
     "taskset_list" \
     "{\"project\":\"$TEST_PROJECT\"}" \
     '"total":0'
 
-print_subsection "15.2 Delete Project"
-run_test "15.2.1 Delete test project" \
+print_subsection "18.2 Delete Project"
+run_test "18.2.1 Delete test project" \
     "project_delete" \
     "{\"name\":\"$TEST_PROJECT\"}" \
     '"deleted":true'
 
-run_test_expect_fail "15.2.2 Verify project deleted" \
+run_test_expect_fail "18.2.2 Verify project deleted" \
     "project_get" \
     "{\"name\":\"$TEST_PROJECT\"}" \
     "not found"
 
-run_test_expect_fail "15.2.3 Verify project files gone" \
+run_test_expect_fail "18.2.3 Verify project files gone" \
     "project_file_list" \
     "{\"project\":\"$TEST_PROJECT\"}" \
     "not found"
 
-run_test_expect_fail "15.2.4 Verify project tasks gone" \
+run_test_expect_fail "18.2.4 Verify project tasks gone" \
     "taskset_list" \
     "{\"project\":\"$TEST_PROJECT\"}" \
     "not found"
 
-run_test_expect_fail "15.2.5 Verify project log gone" \
+run_test_expect_fail "18.2.5 Verify project log gone" \
     "project_log_get" \
     "{\"project\":\"$TEST_PROJECT\"}" \
     "not found"
 
-print_subsection "15.3 Delete Remaining Playbook"
-run_test "15.3.1 Delete test playbook" \
+print_subsection "18.3 Delete Remaining Playbook"
+run_test "18.3.1 Delete test playbook" \
     "playbook_delete" \
     "{\"name\":\"$TEST_PLAYBOOK\"}" \
     '"deleted":true'
 
-run_test_expect_fail "15.3.2 Verify playbook deleted" \
+run_test_expect_fail "18.3.2 Verify playbook deleted" \
     "playbook_file_list" \
     "{\"playbook\":\"$TEST_PLAYBOOK\"}" \
     "not found"
