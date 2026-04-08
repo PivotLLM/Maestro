@@ -3214,11 +3214,11 @@ func (r *Runner) generateAndSaveReport(project, pathFilter string) ([]string, er
 
 // callbackTask represents a single task's status in a callback payload
 type callbackTask struct {
-	ID         int    `json:"id"`
-	UUID       string `json:"uuid"`
-	Title      string `json:"title"`
-	Status     string `json:"status"`
-	ResultFile string `json:"result_file"`
+	ID                  int    `json:"id"`
+	UUID                string `json:"uuid"`
+	Title               string `json:"title"`
+	Status              string `json:"status"`
+	RetrievalInstruction string `json:"retrieval_instruction"`
 }
 
 // callbackPayload is the JSON body sent to a callback URL
@@ -3251,11 +3251,11 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 
 	for _, task := range reloaded.Tasks {
 		payload.Tasks = append(payload.Tasks, callbackTask{
-			ID:         task.ID,
-			UUID:       task.UUID,
-			Title:      task.Title,
-			Status:     task.Work.Status,
-			ResultFile: "results/" + task.UUID + ".json",
+			ID:                  task.ID,
+			UUID:                task.UUID,
+			Title:               task.Title,
+			Status:              task.Work.Status,
+			RetrievalInstruction: fmt.Sprintf(`To retrieve the task result, call: task_result_get with project="%s" and uuid="%s"`, project, task.UUID),
 		})
 	}
 
@@ -3297,13 +3297,13 @@ type DispatchRequest struct {
 
 // DispatchResult is returned immediately from RunDispatch
 type DispatchResult struct {
-	Project    string `json:"project"`
-	Path       string `json:"path"`
-	UUID       string `json:"uuid"`
-	Title      string `json:"title"`
-	Status     string `json:"status"`
-	ResultFile string `json:"result_file"`
-	Message    string `json:"message"`
+	Project              string `json:"project"`
+	Path                 string `json:"path"`
+	UUID                 string `json:"uuid"`
+	Title                string `json:"title"`
+	Status               string `json:"status"`
+	RetrievalInstruction string `json:"retrieval_instruction"`
+	Message              string `json:"message"`
 }
 
 // RunDispatch creates a single-task taskset and executes it asynchronously.
@@ -3358,13 +3358,13 @@ func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
 	}
 
 	result := &DispatchResult{
-		Project:    req.Project,
-		Path:       path,
-		UUID:       task.UUID,
-		Title:      title,
-		Status:     "running",
-		ResultFile: "results/" + task.UUID + ".json",
-		Message:    "Task dispatched and running asynchronously",
+		Project:              req.Project,
+		Path:                 path,
+		UUID:                 task.UUID,
+		Title:                title,
+		Status:               "running",
+		RetrievalInstruction: fmt.Sprintf(`To retrieve the task result, call: task_result_get with project="%s" and uuid="%s"`, req.Project, task.UUID),
+		Message:              "Task dispatched and running asynchronously",
 	}
 
 	// Get the taskset for the goroutine (needed to fire callback)
