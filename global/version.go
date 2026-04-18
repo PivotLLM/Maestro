@@ -10,5 +10,5 @@ const (
 	ProgramName = "Maestro"
 
 	// Version is the current version of the application
-	Version = "0.2.7"
+	Version = "0.2.8"
 )
