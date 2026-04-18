@@ -98,13 +98,21 @@ const (
 	LLMTypeCommand = "command" // Command-line executable (only supported type for now)
 )
 
+// OutputFormat constants for LLM stdout parsing
+const (
+	OutputFormatClaude  = "claude"
+	OutputFormatGemini  = "gemini"
+	OutputFormatCodex   = "codex"
+	OutputFormatGeneric = "generic"
+)
+
 // LLM represents an LLM configuration
 type LLM struct {
-	ID          string   `json:"id"`
-	Description string   `json:"description"`
-	Enabled     bool     `json:"enabled,omitempty"`
-	SystemPrompt string  `json:"system_prompt,omitempty"`
-	Aliases     []string `json:"aliases,omitempty"`
+	ID           string   `json:"id"`
+	Description  string   `json:"description"`
+	Enabled      bool     `json:"enabled,omitempty"`
+	SystemPrompt string   `json:"system_prompt,omitempty"`
+	Aliases      []string `json:"aliases,omitempty"`
 
 	// Type specifies the provider type (only "command" supported for now)
 	Type string `json:"type,omitempty"`
@@ -118,6 +126,10 @@ type LLM struct {
 
 	// WorkingDir is the working directory for process execution (resolved at load time)
 	WorkingDir string `json:"working_dir,omitempty"`
+
+	// OutputFormat specifies how to parse stdout from this LLM's process.
+	// Valid values: "claude", "gemini", "codex", "generic" (default: "generic")
+	OutputFormat string `json:"output_format,omitempty"`
 
 	// RecoveryConfig configures error recovery for this LLM (rate limits, transient errors)
 	RecoveryConfig *LLMRecoveryConfig `json:"recovery,omitempty"`
@@ -440,6 +452,16 @@ func (c *Config) validate() error {
 			}
 			if !hasPromptPlaceholder {
 				return fmt.Errorf("LLM args must contain {{PROMPT}} placeholder for LLM %s (or set stdin: true)", llm.ID)
+			}
+		}
+
+		// Warn on unknown output_format values (empty is allowed and defaults to "generic")
+		if llm.OutputFormat != "" {
+			switch llm.OutputFormat {
+			case OutputFormatClaude, OutputFormatGemini, OutputFormatCodex, OutputFormatGeneric:
+				// valid
+			default:
+				_, _ = fmt.Fprintf(os.Stderr, "Warning: LLM %s: unknown output_format %q, will fall back to generic\n", llm.ID, llm.OutputFormat)
 			}
 		}
 
@@ -913,6 +935,19 @@ func (llm *LLM) GetType() string {
 // IsCommandType returns true if this is a command-line LLM
 func (llm *LLM) IsCommandType() bool {
 	return llm.GetType() == LLMTypeCommand
+}
+
+// GetOutputFormat returns the effective output format for this LLM.
+// Returns OutputFormatGeneric for empty or unknown values; caller should warn on unknown.
+func (llm *LLM) GetOutputFormat() string {
+	switch llm.OutputFormat {
+	case OutputFormatClaude, OutputFormatGemini, OutputFormatCodex, OutputFormatGeneric:
+		return llm.OutputFormat
+	case "":
+		return OutputFormatGeneric
+	default:
+		return OutputFormatGeneric // caller should warn
+	}
 }
 
 // Helper functions

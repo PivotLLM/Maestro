@@ -17,7 +17,8 @@
       "type": "command",
       "stdin": true,
       "command": "claude",
-      "args": ["-p"],
+      "args": ["-p", "--output-format", "json"],
+      "output_format": "claude",
       "description": "Claude Code CLI (Anthropic). Prompt piped via stdin.",
       "enabled": false,
       "recovery": {
@@ -38,7 +39,8 @@
       "type": "command",
       "stdin": true,
       "command": "codex",
-      "args": ["exec", "--skip-git-repo-check"],
+      "args": ["exec", "--json", "--skip-git-repo-check"],
+      "output_format": "codex",
       "description": "OpenAI Codex CLI (GPT). Prompt piped via stdin.",
       "enabled": false,
       "recovery": {
@@ -58,7 +60,8 @@
       "type": "command",
       "stdin": true,
       "command": "gemini",
-      "args": ["--yolo", "--prompt", ""],
+      "args": ["--yolo", "--output-format", "json"],
+      "output_format": "gemini",
       "description": "Google Gemini CLI. Prompt piped via stdin; --yolo auto-approves tool calls.",
       "enabled": false,
       "recovery": {

@@ -429,8 +429,8 @@ func (r *Runner) recordHistoryResponse(taskUUID, role string, result *llm.Dispat
 		Stdout:       stdout,
 		Stderr:       stderr,
 		ResponseSize: responseSize,
-		Type:         "response",    // Legacy field for compatibility
-		Content:      stdout,        // Legacy field for compatibility
+		Type:         "response", // Legacy field for compatibility
+		Content:      stdout,     // Legacy field for compatibility
 	}
 
 	existing, _ := r.taskHistory.LoadOrStore(taskUUID, []global.Message{})
@@ -1491,8 +1491,11 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		return
 	}
 
-	// Success - use Stdout as response
-	response := dispatchResult.Stdout
+	// Success - use parsed Text as response, fall back to raw Stdout
+	response := dispatchResult.Text
+	if response == "" {
+		response = dispatchResult.Stdout
+	}
 	r.logger.Infof("Task %d: Saving result", task.ID)
 	r.finishTask(project, path, task, response, "", fullPrompt, dispatchResult.Stderr, result, limits)
 
@@ -1854,11 +1857,10 @@ func (r *Runner) finishTask(project, path string, task *global.Task, response, e
 			r.writeFailedTaskResult(project, task, fullPrompt, response, errorMsg)
 		}
 	} else {
-		// Extract JSON from response (handles markdown code fences and LLM wrapper)
-		response = templates.ExtractJSON(response)
-
-		// Validate response against task set schema if configured (skip if SkipValidation=true)
+		// Validate response against task set schema if configured (skip if SkipValidation=true).
+		// ExtractJSON is only applied when a schema is configured (avoids corrupting plain-text responses).
 		if taskSet, err := r.tasks.GetTaskSet(project, path); err == nil && taskSet.WorkerResponseTemplate != "" && !taskSet.SkipValidation {
+			response = templates.ExtractJSON(response)
 			schema := r.loadSchemaContent(project, taskSet.WorkerResponseTemplate)
 			if schema != "" {
 				validationResult, validationErr := r.validator.ValidateJSON([]byte(response), schema)
@@ -2515,20 +2517,10 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 		return fmt.Errorf("QA LLM call failed: %w", err)
 	}
 
-	// Extract response as string
-	qaResponse := ""
-	if dispatchResult.Output != nil {
-		switch v := dispatchResult.Output.(type) {
-		case string:
-			qaResponse = v
-		default:
-			// Try to marshal to JSON
-			if data, err := json.Marshal(v); err == nil {
-				qaResponse = string(data)
-			} else {
-				r.logger.Warnf("Task %d: Failed to marshal QA response: %v", task.ID, err)
-			}
-		}
+	// Extract response text using parsed output, fall back to raw stdout
+	qaResponse := dispatchResult.Text
+	if qaResponse == "" {
+		qaResponse = dispatchResult.Stdout
 	}
 
 	qaLLMElapsed := time.Since(qaLLMStartTime).Seconds()
@@ -2538,11 +2530,10 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 	// Record QA response in history with full DispatchResult (raw response before JSON extraction)
 	r.recordHistoryResponse(task.UUID, "qa", dispatchResult, qaLLMID, task.QA.Invocations)
 
-	// Extract JSON from response (handles markdown code fences and LLM wrapper)
-	qaResponse = templates.ExtractJSON(qaResponse)
-
-	// Validate QA response against task set schema if configured
+	// Validate QA response against task set schema if configured.
+	// ExtractJSON is only applied when a schema is configured (avoids corrupting plain-text responses).
 	if taskSet, err := r.tasks.GetTaskSet(project, path); err == nil && taskSet.QAResponseTemplate != "" {
+		qaResponse = templates.ExtractJSON(qaResponse)
 		schema := r.loadSchemaContent(project, taskSet.QAResponseTemplate)
 		if schema != "" {
 			validationResult, validationErr := r.validator.ValidateJSON([]byte(qaResponse), schema)
@@ -2986,19 +2977,10 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int
 		return fmt.Errorf("LLM call failed: %w", err)
 	}
 
-	// Extract response as string
-	response := ""
-	if dispatchResult.Output != nil {
-		switch v := dispatchResult.Output.(type) {
-		case string:
-			response = v
-		default:
-			if data, err := json.Marshal(v); err == nil {
-				response = string(data)
-			} else {
-				r.logger.Warnf("Task %d: Failed to marshal response: %v", task.ID, err)
-			}
-		}
+	// Extract response text using parsed output, fall back to raw stdout
+	response := dispatchResult.Text
+	if response == "" {
+		response = dispatchResult.Stdout
 	}
 
 	responseSize := len(response)
@@ -3009,8 +2991,10 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int
 	// Record revision response in history with full DispatchResult (raw response before JSON extraction)
 	r.recordHistoryResponse(task.UUID, "worker", dispatchResult, llmID, task.Work.Invocations)
 
-	// Extract JSON from response (handles markdown code fences)
-	response = templates.ExtractJSON(response)
+	// Extract JSON only when a worker response schema is configured (avoids corrupting plain-text responses)
+	if taskSet, err := r.tasks.GetTaskSet(project, path); err == nil && taskSet.WorkerResponseTemplate != "" {
+		response = templates.ExtractJSON(response)
+	}
 
 	// Save revised work result
 	resultsDir = r.tasks.GetResultsDir(project)
@@ -3214,10 +3198,10 @@ func (r *Runner) generateAndSaveReport(project, pathFilter string) ([]string, er
 
 // callbackTask represents a single task's status in a callback payload
 type callbackTask struct {
-	ID                  int    `json:"id"`
-	UUID                string `json:"uuid"`
-	Title               string `json:"title"`
-	Status              string `json:"status"`
+	ID                   int    `json:"id"`
+	UUID                 string `json:"uuid"`
+	Title                string `json:"title"`
+	Status               string `json:"status"`
 	RetrievalInstruction string `json:"retrieval_instruction"`
 }
 
@@ -3251,10 +3235,10 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 
 	for _, task := range reloaded.Tasks {
 		payload.Tasks = append(payload.Tasks, callbackTask{
-			ID:                  task.ID,
-			UUID:                task.UUID,
-			Title:               task.Title,
-			Status:              task.Work.Status,
+			ID:                   task.ID,
+			UUID:                 task.UUID,
+			Title:                task.Title,
+			Status:               task.Work.Status,
 			RetrievalInstruction: fmt.Sprintf(`To retrieve the task result, call: task_result_get with project="%s" and uuid="%s"`, project, task.UUID),
 		})
 	}

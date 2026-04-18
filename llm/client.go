@@ -8,7 +8,6 @@ package llm
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -40,22 +39,23 @@ type DispatchRequest struct {
 
 // DispatchOptions represents options for LLM dispatch
 type DispatchOptions struct {
-	ResponseFormat string  `json:"response_format,omitempty"`
-	MaxTokens      int     `json:"max_tokens,omitempty"`
-	Temperature    float64 `json:"temperature,omitempty"`
-	ModelOverride  string  `json:"model_override,omitempty"`
-	Timeout        int     `json:"timeout,omitempty"` // Timeout in seconds (min: 60, max: 900, default: 300)
+	MaxTokens     int     `json:"max_tokens,omitempty"`
+	Temperature   float64 `json:"temperature,omitempty"`
+	ModelOverride string  `json:"model_override,omitempty"`
+	Timeout       int     `json:"timeout,omitempty"` // Timeout in seconds (min: 60, max: 900, default: 300)
 }
 
 // DispatchResult represents the result of an LLM dispatch
 // This is returned when the LLM command was invoked (any exit code).
 // For infrastructure failures (command not found, permission denied), Dispatch returns (nil, error).
 type DispatchResult struct {
-	ExitCode     int         `json:"exit_code"`               // Command exit code (0 = success, non-zero = LLM error)
-	Stdout       string      `json:"stdout"`                  // Raw stdout (ALWAYS captured)
-	Stderr       string      `json:"stderr"`                  // Raw stderr (ALWAYS captured)
-	Output       interface{} `json:"output,omitempty"`        // Parsed JSON (if ExitCode==0 and parsing succeeded)
-	ResponseSize int         `json:"response_size,omitempty"` // Size of stdout in bytes
+	ExitCode     int    `json:"exit_code"`               // Command exit code (0 = success, non-zero = LLM error)
+	Stdout       string `json:"stdout"`                  // Raw stdout (ALWAYS captured)
+	Stderr       string `json:"stderr"`                  // Raw stderr (ALWAYS captured)
+	Text         string `json:"text,omitempty"`          // Parser-extracted response text
+	IsError      bool   `json:"is_error,omitempty"`      // LLM reported an error in its output envelope
+	TurnCount    int    `json:"turn_count,omitempty"`    // Number of turns (0 if not reported)
+	ResponseSize int    `json:"response_size,omitempty"` // Size of stdout in bytes
 }
 
 // NewService creates a new LLM service
@@ -90,9 +90,10 @@ type LLMInfo struct {
 //
 //goland:noinspection GoNameStartsWithPackageName
 type LLMExecInfo struct {
-	ID          string `json:"id"`
-	Mode        string `json:"mode"`         // "command" (only mode currently)
-	PromptInput string `json:"prompt_input"` // "stdin" or "args"
+	ID           string `json:"id"`
+	Mode         string `json:"mode"`          // "command" (only mode currently)
+	PromptInput  string `json:"prompt_input"`  // "stdin" or "args"
+	OutputFormat string `json:"output_format"` // output format used for parsing
 }
 
 // LLMListResult represents the result of listing LLMs
@@ -138,9 +139,10 @@ func (s *Service) GetExecInfo(llmID string) *LLMExecInfo {
 	}
 
 	return &LLMExecInfo{
-		ID:          llm.ID,
-		Mode:        mode,
-		PromptInput: promptInput,
+		ID:           llm.ID,
+		Mode:         mode,
+		PromptInput:  promptInput,
+		OutputFormat: llm.GetOutputFormat(),
 	}
 }
 
@@ -457,43 +459,22 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 
 	s.logger.Debugf("LLM command exited with code %d, returned %d bytes, stderr %d bytes", exitCode, responseSize, len(stderrOutput))
 
+	// Parse stdout according to the LLM's configured output format
+	parsed := parseOutput(llm.GetOutputFormat(), output)
+
 	// Build result - always include Stdout and Stderr
 	result := &DispatchResult{
 		ExitCode:     exitCode,
 		Stdout:       output,
 		Stderr:       stderrOutput,
+		Text:         parsed.Text,
+		IsError:      parsed.IsError,
+		TurnCount:    parsed.TurnCount,
 		ResponseSize: responseSize,
 	}
 
-	// Only parse Output if command succeeded (exit code 0)
 	if exitCode != 0 {
 		s.logger.Warnf("LLM command exited with non-zero code %d", exitCode)
-		return result, nil
-	}
-
-	// Handle response format for successful commands
-	responseFormat := global.ResponseFormatText
-	if req.Options != nil && req.Options.ResponseFormat != "" {
-		responseFormat = req.Options.ResponseFormat
-	}
-
-	switch responseFormat {
-	case global.ResponseFormatJSON:
-		// Parse as JSON
-		var jsonResult interface{}
-		if err := json.Unmarshal([]byte(output), &jsonResult); err != nil {
-			// JSON parse failure - still return the result with Stdout populated
-			s.logger.Warnf("Failed to parse JSON from command output: %v", err)
-			return result, nil
-		}
-		result.Output = jsonResult
-
-	case global.ResponseFormatText:
-		fallthrough
-	default:
-		result.Output = map[string]interface{}{
-			"text": output,
-		}
 	}
 
 	return result, nil
