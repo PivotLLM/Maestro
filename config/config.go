@@ -131,6 +131,9 @@ type LLM struct {
 	// Valid values: "claude", "gemini", "codex", "generic" (default: "generic")
 	OutputFormat string `json:"output_format,omitempty"`
 
+	// Timeout is the per-LLM call timeout in seconds (default: global.DefaultTimeout)
+	Timeout int `json:"timeout,omitempty"`
+
 	// RecoveryConfig configures error recovery for this LLM (rate limits, transient errors)
 	RecoveryConfig *LLMRecoveryConfig `json:"recovery,omitempty"`
 }
@@ -452,6 +455,18 @@ func (c *Config) validate() error {
 			}
 			if !hasPromptPlaceholder {
 				return fmt.Errorf("LLM args must contain {{PROMPT}} placeholder for LLM %s (or set stdin: true)", llm.ID)
+			}
+		}
+
+		// Validate and normalize timeout (0 → DefaultTimeout)
+		normalizedTimeout, timeoutErr := global.ValidateTimeout(llm.Timeout)
+		if timeoutErr != nil {
+			return fmt.Errorf("invalid timeout for LLM %s: %w", llm.ID, timeoutErr)
+		}
+		for i := range c.data.LLMs {
+			if c.data.LLMs[i].ID == llm.ID {
+				c.data.LLMs[i].Timeout = normalizedTimeout
+				break
 			}
 		}
 

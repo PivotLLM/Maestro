@@ -24,7 +24,6 @@ func (s *Server) handleTaskRun(ctx context.Context, req mcp.CallToolRequest) (*m
 	path := mcp.ParseString(req, "path", "")
 	taskType := mcp.ParseString(req, "type", "")
 	parallelStr := mcp.ParseString(req, "parallel", "")
-	timeout := int(mcp.ParseFloat64(req, "timeout", 0))
 
 	s.logToolCall(global.ToolTaskRun, map[string]string{"project": project, "path": path})
 
@@ -37,7 +36,6 @@ func (s *Server) handleTaskRun(ctx context.Context, req mcp.CallToolRequest) (*m
 		Project: project,
 		Path:    path,
 		Type:    taskType,
-		Timeout: timeout,
 	}
 
 	// Only set Parallel if explicitly provided

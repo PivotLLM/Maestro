@@ -685,9 +685,6 @@ func (s *Server) registerTools() error {
 				mcp.Description("The prompt to send to the LLM"),
 				mcp.Required(),
 			),
-			mcp.WithNumber("timeout",
-				mcp.Description("LLM call timeout in seconds (min: 60, max: 1200, default: 600)"),
-			),
 		), s.handleLLMDispatch)
 
 	s.mcpServer.AddTool(
@@ -1389,9 +1386,6 @@ func (s *Server) registerTools() error {
 			mcp.WithString("description",
 				mcp.Description("Optional caller-supplied description echoed back in the callback payload"),
 			),
-			mcp.WithNumber("timeout",
-				mcp.Description("Timeout in seconds (min: 60, max: 1200, default: 600)"),
-			),
 		), s.handleTaskDispatch)
 
 	s.mcpServer.AddTool(
@@ -1612,9 +1606,6 @@ func (s *Server) registerTools() error {
 			),
 			mcp.WithString("parallel",
 				mcp.Description("Override taskset parallel setting: 'true' or 'false' (optional, defaults to taskset setting)"),
-			),
-			mcp.WithNumber("timeout",
-				mcp.Description("LLM call timeout in seconds (60-1200, default: 600)"),
 			),
 		), s.handleTaskRun)
 

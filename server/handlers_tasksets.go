@@ -699,7 +699,6 @@ func (s *Server) handleTaskDispatch(_ context.Context, req mcp.CallToolRequest) 
 	instructionsFileSource := mcp.ParseString(req, "instructions_file_source", "")
 	callbackURL := mcp.ParseString(req, "callback_url", "")
 	description := mcp.ParseString(req, "description", "")
-	timeout := int(mcp.ParseFloat64(req, "timeout", 0))
 
 	s.logToolCall(global.ToolTaskDispatch, map[string]string{"project": project, "path": path})
 
@@ -723,7 +722,6 @@ func (s *Server) handleTaskDispatch(_ context.Context, req mcp.CallToolRequest) 
 		InstructionsFileSource: instructionsFileSource,
 		CallbackURL:            callbackURL,
 		Description:            description,
-		Timeout:                timeout,
 	}
 
 	result, err := s.runner.RunDispatch(dispatchReq)

@@ -728,12 +728,6 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunRe
 		return result, nil
 	}
 
-	// Validate timeout
-	timeout := req.Timeout
-	if timeout == 0 {
-		timeout = global.DefaultTimeout
-	}
-
 	// Prepare execution parameters
 	// Use context.Background() so the goroutine is not cancelled when the MCP request context ends
 	// (e.g., when the stdio connection closes after returning the response)
@@ -743,7 +737,6 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunRe
 		taskSetList:   taskSetList,
 		eligibleTasks: eligibleTasks,
 		result:        result,
-		timeout:       timeout,
 	}
 
 	// Async execution - return immediately
@@ -765,7 +758,6 @@ type runExecutionParams struct {
 	taskSetList   *tasks.TaskSetListResult
 	eligibleTasks []*global.Task
 	result        *global.RunResult
-	timeout       int
 }
 
 // executeRun performs the actual task execution (shared between sync and async modes)
@@ -825,9 +817,9 @@ func (r *Runner) executeRun(params *runExecutionParams) {
 	if runParallel {
 		// Get max concurrency from config
 		maxConcurrent := r.config.Runner().MaxConcurrent
-		r.runParallel(params.ctx, params.req.Project, params.req.Path, params.eligibleTasks, params.result, maxConcurrent, params.timeout, budget, limits)
+		r.runParallel(params.ctx, params.req.Project, params.req.Path, params.eligibleTasks, params.result, maxConcurrent, budget, limits)
 	} else {
-		r.runSequential(params.ctx, params.req.Project, params.req.Path, params.eligibleTasks, params.result, params.timeout, budget, limits)
+		r.runSequential(params.ctx, params.req.Project, params.req.Path, params.eligibleTasks, params.result, budget, limits)
 	}
 
 	// Log budget usage
@@ -906,7 +898,7 @@ func (r *Runner) getTasksNeedingRetry(project, path string) []*global.Task {
 // runSequential executes tasks one at a time.
 // In sequential mode, tasks are assumed to be dependent on previous tasks completing.
 // If a task is not done (failed, waiting, etc.), the pass ends and we move to the next round.
-func (r *Runner) runSequential(ctx context.Context, project, path string, tasks []*global.Task, result *global.RunResult, timeout int, budget *runBudget, limits global.Limits) {
+func (r *Runner) runSequential(ctx context.Context, project, path string, tasks []*global.Task, result *global.RunResult, budget *runBudget, limits global.Limits) {
 	maxRounds := r.config.Runner().MaxRounds
 	runnerConfig := r.config.Runner()
 	roundDelay := time.Duration(runnerConfig.RoundDelaySeconds) * time.Second
@@ -983,7 +975,7 @@ func (r *Runner) runSequential(ctx context.Context, project, path string, tasks 
 			}
 
 			// Execute the task
-			r.executeTaskWithRecovery(ctx, project, taskSetPath, taskInfo, result, timeout, budget, limits, recovery)
+			r.executeTaskWithRecovery(ctx, project, taskSetPath, taskInfo, result, budget, limits, recovery)
 
 			// Refresh task status after execution
 			updatedTask, _, err := r.tasks.GetTask(project, task.UUID)
@@ -1022,7 +1014,7 @@ func (r *Runner) runSequential(ctx context.Context, project, path string, tasks 
 // runParallel executes tasks concurrently with a worker pool.
 // In parallel mode, tasks are independent and can run concurrently.
 // If a task fails, other tasks continue. Recovery mode is checked between rounds.
-func (r *Runner) runParallel(ctx context.Context, project, path string, tasks []*global.Task, result *global.RunResult, maxConcurrent int, timeout int, budget *runBudget, limits global.Limits) {
+func (r *Runner) runParallel(ctx context.Context, project, path string, tasks []*global.Task, result *global.RunResult, maxConcurrent int, budget *runBudget, limits global.Limits) {
 	var mu sync.Mutex
 	sem := make(chan struct{}, maxConcurrent)
 	maxRounds := r.config.Runner().MaxRounds
@@ -1111,7 +1103,7 @@ func (r *Runner) runParallel(ctx context.Context, project, path string, tasks []
 				}
 
 				localResult := &global.RunResult{}
-				r.executeTask(ctx, project, taskSetPath, taskInfo, localResult, timeout, budget, limits)
+				r.executeTask(ctx, project, taskSetPath, taskInfo, localResult, budget, limits)
 
 				// Merge results
 				mu.Lock()
@@ -1232,7 +1224,7 @@ func (r *Runner) handleRecovery(ctx context.Context, project string, recovery *r
 
 // executeTaskWithRecovery executes a task and enters recovery mode if it fails.
 // This wrapper is used in sequential mode where we need to pause on failures.
-func (r *Runner) executeTaskWithRecovery(ctx context.Context, project, path string, task *global.Task, result *global.RunResult, timeout int, budget *runBudget, limits global.Limits, recovery *recoveryState) {
+func (r *Runner) executeTaskWithRecovery(ctx context.Context, project, path string, task *global.Task, result *global.RunResult, budget *runBudget, limits global.Limits, recovery *recoveryState) {
 	// Check for cancellation
 	select {
 	case <-ctx.Done():
@@ -1241,7 +1233,7 @@ func (r *Runner) executeTaskWithRecovery(ctx context.Context, project, path stri
 	}
 
 	// Execute the task
-	r.executeTask(ctx, project, path, task, result, timeout, budget, limits)
+	r.executeTask(ctx, project, path, task, result, budget, limits)
 
 	// Check if the task failed - if so, we may need to enter recovery mode
 	updatedTask, _, err := r.tasks.GetTask(project, task.UUID)
@@ -1275,7 +1267,7 @@ func (r *Runner) executeTaskWithRecovery(ctx context.Context, project, path stri
 }
 
 // executeTask executes a single task
-func (r *Runner) executeTask(_ context.Context, project, path string, task *global.Task, result *global.RunResult, timeout int, budget *runBudget, limits global.Limits) {
+func (r *Runner) executeTask(_ context.Context, project, path string, task *global.Task, result *global.RunResult, budget *runBudget, limits global.Limits) {
 	// Panic recovery to prevent crashes
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -1308,7 +1300,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 			// Check if QA needs to be run
 			if task.QA.Enabled && task.QA.Status != global.ExecutionStatusDone {
 				r.logger.Infof("Task %d: QA enabled and not complete, starting QA workflow", task.ID)
-				r.executeQAWorkflow(project, path, task, result, timeout, budget, limits)
+				r.executeQAWorkflow(project, path, task, result, budget, limits)
 			}
 			return
 		}
@@ -1381,16 +1373,6 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	// Record worker prompt in history
 	r.recordHistory(project, task.UUID, "worker", "prompt", fullPrompt, llmID, task.Work.Invocations)
 
-	// Build dispatch options with timeout if specified
-	var options *llm.DispatchOptions
-	timeoutSeconds := global.DefaultTimeout
-	if timeout > 0 {
-		timeoutSeconds = timeout
-		options = &llm.DispatchOptions{
-			Timeout: timeout,
-		}
-	}
-
 	// Check budget before LLM call
 	if !budget.checkAndIncrement() {
 		r.logger.Warnf("Task %d: LLM budget exceeded, skipping", task.ID)
@@ -1408,13 +1390,12 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		mode = execInfo.Mode
 		promptInput = execInfo.PromptInput
 	}
-	r.logger.Infof("Task %d: Calling LLM: %s, mode: %s, prompt: %s, size: %d bytes, timeout: %ds", task.ID, displayName, mode, promptInput, promptSize, timeoutSeconds)
-	r.logToProject(project, fmt.Sprintf("Task %d: Calling LLM: %s, mode: %s, prompt: %s, size: %d bytes, timeout: %ds", task.ID, displayName, mode, promptInput, promptSize, timeoutSeconds))
+	r.logger.Infof("Task %d: Calling LLM: %s, mode: %s, prompt: %s, size: %d bytes", task.ID, displayName, mode, promptInput, promptSize)
+	r.logToProject(project, fmt.Sprintf("Task %d: Calling LLM: %s, mode: %s, prompt: %s, size: %d bytes", task.ID, displayName, mode, promptInput, promptSize))
 
 	dispatchReq := &llm.DispatchRequest{
-		LLMID:   llmID,
-		Prompt:  fullPrompt,
-		Options: options,
+		LLMID:  llmID,
+		Prompt: fullPrompt,
 	}
 
 	r.logger.Infof("Task %d: Dispatching to LLM service", task.ID)
@@ -1502,7 +1483,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	// Check if QA is enabled after successful work completion
 	if task.QA.Enabled && task.Work.Status == global.ExecutionStatusDone {
 		r.logger.Infof("Task %d: QA enabled, starting QA workflow", task.ID)
-		r.executeQAWorkflow(project, path, task, result, timeout, budget, limits)
+		r.executeQAWorkflow(project, path, task, result, budget, limits)
 	}
 
 	// Log final "Finished" status for terminal states only
@@ -2313,7 +2294,7 @@ func ValidateTaskInstructions(instructionsFile, instructionsFileSource string) e
 }
 
 // executeQAWorkflow executes the QA workflow after successful work completion
-func (r *Runner) executeQAWorkflow(project, path string, task *global.Task, result *global.RunResult, timeout int, budget *runBudget, limits global.Limits) {
+func (r *Runner) executeQAWorkflow(project, path string, task *global.Task, result *global.RunResult, budget *runBudget, limits global.Limits) {
 	r.logger.Infof("Task %d: Starting QA workflow (invocations: %d, max: %d)", task.ID, task.QA.Invocations, limits.MaxQA)
 	r.logToProject(project, fmt.Sprintf("Task %d: Starting QA workflow", task.ID))
 
@@ -2410,7 +2391,7 @@ func (r *Runner) executeQAWorkflow(project, path string, task *global.Task, resu
 			r.logger.Infof("Task %d: QA verdict 'fail', revising work (%d/%d)", task.ID, task.QA.Invocations, limits.MaxQA)
 			r.logToProject(project, fmt.Sprintf("Task %d: QA failed, revising work (%d/%d)", task.ID, task.QA.Invocations, limits.MaxQA))
 
-			err = r.reviseWork(project, path, task, timeout, budget, limits)
+			err = r.reviseWork(project, path, task, budget, limits)
 			if err != nil {
 				r.logger.Errorf("Task %d: Work revision failed: %v", task.ID, err)
 				r.logToProject(project, fmt.Sprintf("Task %d: Work revision failed: %v", task.ID, err))
@@ -2811,7 +2792,7 @@ func (r *Runner) buildQAPrompt(project, path string, task *global.Task) (string,
 }
 
 // reviseWork re-executes the work with QA feedback
-func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int, budget *runBudget, limits global.Limits) error {
+func (r *Runner) reviseWork(project, path string, task *global.Task, budget *runBudget, limits global.Limits) error {
 	r.logger.Infof("Task %d: Revising work with QA feedback", task.ID)
 	r.logToProject(project, fmt.Sprintf("Task %d: Revising work with QA feedback", task.ID))
 
@@ -2910,16 +2891,6 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int
 	// Store resolved canonical LLM ID for result file
 	task.Work.LLMModelID = llmID
 
-	// Build dispatch options with timeout if specified
-	var options *llm.DispatchOptions
-	timeoutSeconds := global.DefaultTimeout
-	if timeout > 0 {
-		timeoutSeconds = timeout
-		options = &llm.DispatchOptions{
-			Timeout: timeout,
-		}
-	}
-
 	// Get exec info for detailed logging
 	revExecInfo := r.llm.GetExecInfo(llmID)
 	revDisplayName := llmID
@@ -2929,8 +2900,8 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int
 		revMode = revExecInfo.Mode
 		revPromptInput = revExecInfo.PromptInput
 	}
-	r.logger.Infof("Task %d: Calling revision LLM: %s, mode: %s, prompt: %s, size: %d bytes, timeout: %ds", task.ID, revDisplayName, revMode, revPromptInput, promptSize, timeoutSeconds)
-	r.logToProject(project, fmt.Sprintf("Task %d: Calling revision LLM: %s, mode: %s, prompt: %s, size: %d bytes, timeout: %ds", task.ID, revDisplayName, revMode, revPromptInput, promptSize, timeoutSeconds))
+	r.logger.Infof("Task %d: Calling revision LLM: %s, mode: %s, prompt: %s, size: %d bytes", task.ID, revDisplayName, revMode, revPromptInput, promptSize)
+	r.logToProject(project, fmt.Sprintf("Task %d: Calling revision LLM: %s, mode: %s, prompt: %s, size: %d bytes", task.ID, revDisplayName, revMode, revPromptInput, promptSize))
 
 	// Update work metadata (keep status as 'waiting' until fully complete)
 	now := time.Now()
@@ -2955,9 +2926,8 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, timeout int
 
 	// Call LLM
 	dispatchReq := &llm.DispatchRequest{
-		LLMID:   llmID,
-		Prompt:  fullPrompt,
-		Options: options,
+		LLMID:  llmID,
+		Prompt: fullPrompt,
 	}
 
 	revisionLLMStartTime := time.Now()
@@ -3276,7 +3246,6 @@ type DispatchRequest struct {
 	InstructionsFileSource string
 	CallbackURL            string
 	Description            string // caller-supplied description echoed in callback payload
-	Timeout                int
 }
 
 // DispatchResult is returned immediately from RunDispatch
@@ -3312,14 +3281,8 @@ func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
 		title = "Dispatched task"
 	}
 
-	// Validate timeout
-	timeout, err := global.ValidateTimeout(req.Timeout)
-	if err != nil {
-		return nil, err
-	}
-
 	// Create taskset with SkipValidation=true
-	_, err = r.tasks.CreateTaskSet(req.Project, path, title, "", nil, false, global.Limits{}, true, req.CallbackURL)
+	_, err := r.tasks.CreateTaskSet(req.Project, path, title, "", nil, false, global.Limits{}, true, req.CallbackURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dispatch taskset: %w", err)
 	}
@@ -3372,7 +3335,7 @@ func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
 		budget := r.newRunBudget([]*global.Task{taskInfo}, limits, 0.10)
 		localResult := &global.RunResult{}
 
-		r.executeTask(context.Background(), req.Project, taskSetPath, taskInfo, localResult, timeout, budget, limits)
+		r.executeTask(context.Background(), req.Project, taskSetPath, taskInfo, localResult, budget, limits)
 
 		// Fire callback if configured
 		if callbackURL != "" {

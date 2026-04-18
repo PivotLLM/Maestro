@@ -355,7 +355,6 @@ func TestRunReturnsImmediately(t *testing.T) {
 	start := time.Now()
 	result, err := runner.Run(context.Background(), &global.RunRequest{
 		Project: projectName,
-		Timeout: 30,
 	})
 	elapsed := time.Since(start)
 
@@ -413,7 +412,6 @@ func TestRunConcurrencyPrevention(t *testing.T) {
 	// Start first run
 	result1, err := runner.Run(context.Background(), &global.RunRequest{
 		Project: projectName,
-		Timeout: 30,
 	})
 	if err != nil {
 		t.Fatalf("First Run failed: %v", err)
@@ -427,7 +425,6 @@ func TestRunConcurrencyPrevention(t *testing.T) {
 	// Immediately try to start second run (before first completes)
 	result2, err := runner.Run(context.Background(), &global.RunRequest{
 		Project: projectName,
-		Timeout: 30,
 	})
 	if err != nil {
 		t.Fatalf("Second Run failed: %v", err)
@@ -485,7 +482,6 @@ func TestGetTaskStatusShowsRunInProgress(t *testing.T) {
 	// Start run
 	_, err = runner.Run(context.Background(), &global.RunRequest{
 		Project: projectName,
-		Timeout: 30,
 	})
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)

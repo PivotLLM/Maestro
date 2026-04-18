@@ -243,7 +243,6 @@ func (s *Server) handleLLMList(_ context.Context, _ mcp.CallToolRequest) (*mcp.C
 func (s *Server) handleLLMDispatch(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	llmID := mcp.ParseString(request, "llm_id", "")
 	prompt := mcp.ParseString(request, "prompt", "")
-	timeout := int(mcp.ParseFloat64(request, "timeout", 0))
 
 	s.logToolCall(global.ToolLLMDispatch, map[string]string{"llm_id": llmID})
 
@@ -254,31 +253,13 @@ func (s *Server) handleLLMDispatch(_ context.Context, request mcp.CallToolReques
 		return mcp.NewToolResultError("prompt parameter is required"), nil
 	}
 
-	// Validate timeout
-	if timeout > 0 {
-		_, err := global.ValidateTimeout(timeout)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-	}
-
-	// Parse context_keys and options from raw arguments if available
+	// Parse context_keys from raw arguments if available
 	var contextKeys []string
-	var options *llm.DispatchOptions
-
-	// Add timeout to options if provided
-	if timeout > 0 {
-		if options == nil {
-			options = &llm.DispatchOptions{}
-		}
-		options.Timeout = timeout
-	}
 
 	req := &llm.DispatchRequest{
 		LLMID:       llmID,
 		Prompt:      prompt,
 		ContextKeys: contextKeys,
-		Options:     options,
 	}
 
 	result, err := s.llm.Dispatch(req)

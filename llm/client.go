@@ -42,7 +42,6 @@ type DispatchOptions struct {
 	MaxTokens     int     `json:"max_tokens,omitempty"`
 	Temperature   float64 `json:"temperature,omitempty"`
 	ModelOverride string  `json:"model_override,omitempty"`
-	Timeout       int     `json:"timeout,omitempty"` // Timeout in seconds (min: 60, max: 900, default: 300)
 }
 
 // DispatchResult represents the result of an LLM dispatch
@@ -227,13 +226,10 @@ func (s *Service) Dispatch(req *DispatchRequest) (*DispatchResult, error) {
 		return nil, err
 	}
 
-	// Extract and validate timeout
-	timeout := global.DefaultTimeout
-	if req.Options != nil && req.Options.Timeout > 0 {
-		timeout, err = global.ValidateTimeout(req.Options.Timeout)
-		if err != nil {
-			return nil, err
-		}
+	// Timeout comes from the LLM config (set at load time; always >= MinTimeout)
+	timeout := llm.Timeout
+	if timeout == 0 {
+		timeout = global.DefaultTimeout
 	}
 
 	s.logger.Debugf("Dispatching to LLM %s (timeout: %ds): %s", req.LLMID, timeout, req.Prompt)
@@ -279,9 +275,6 @@ func (s *Service) TestLLM(llmID string) (bool, error) {
 	result, err := s.Dispatch(&DispatchRequest{
 		LLMID:  llmID,
 		Prompt: testPrompt,
-		Options: &DispatchOptions{
-			Timeout: 60, // Short timeout for test
-		},
 	})
 
 	if err != nil {

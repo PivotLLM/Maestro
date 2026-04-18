@@ -181,9 +181,9 @@ const (
 	DefaultLimit            = 50
 	DefaultLogLimit         = 100
 	DefaultContextSizeLimit = 256 * 1024 // 256 KB
-	DefaultTimeout          = 600        // seconds
+	DefaultTimeout          = 1800       // seconds
 	MinTimeout              = 60         // seconds
-	MaxTimeout              = 1200       // seconds
+	MaxTimeout              = 1800       // seconds
 
 	// Limits: Infrastructure Retries (network failures, command timeouts - no LLM cost)
 	DefaultMaxRetries = 3  // Default retries for infrastructure failures
