@@ -53,6 +53,7 @@ type Config struct {
 	resolvedExtraPath []string               // resolved extra PATH entries for LLM command lookup
 	embeddedFS        embed.FS               // embedded reference files
 	llmAliasMap       map[string]string      // maps alias (or canonical id) → canonical id
+	warnings          []string               // deferred warnings collected before logger is available
 }
 
 // configData holds the parsed configuration (internal)
@@ -209,15 +210,14 @@ func (c *Config) Load() error {
 	}
 	c.configPath = configPath
 
-	// Determine if this is a first-run scenario
-	baseDir := c.resolveDefaultBaseDir()
-	baseDirExists := dirExists(baseDir)
 	configExists := fileExists(configPath)
 
-	// First-run: create base directory
-	if !baseDirExists {
-		if err := os.MkdirAll(baseDir, 0755); err != nil {
-			return fmt.Errorf("failed to create base directory %s: %w", baseDir, err)
+	// Only create ~/.maestro if we're actually using the default config location.
+	// If MAESTRO_CONFIG or --config points elsewhere, don't touch ~/.maestro.
+	defaultBaseDir := c.resolveDefaultBaseDir()
+	if strings.HasPrefix(configPath, defaultBaseDir) && !dirExists(defaultBaseDir) {
+		if err := os.MkdirAll(defaultBaseDir, 0755); err != nil {
+			return fmt.Errorf("failed to create base directory %s: %w", defaultBaseDir, err)
 		}
 	}
 
@@ -485,7 +485,7 @@ func (c *Config) validate() error {
 			expandedCmd := expandHomePath(llm.Command)
 			resolvedCmd, lookErr := lookPath(expandedCmd, c.resolvedExtraPath)
 			if lookErr != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "Warning: LLM %s: executable not found: %s - disabling\n", llm.ID, llm.Command)
+				c.warnings = append(c.warnings, fmt.Sprintf("LLM %s: executable not found: %s - disabling", llm.ID, llm.Command))
 				for i := range c.data.LLMs {
 					if c.data.LLMs[i].ID == llm.ID {
 						c.data.LLMs[i].Enabled = false
@@ -862,6 +862,12 @@ func (c *Config) MarkNonDestructive() bool {
 // IsFirstRun returns true if this is the first run (config was just created)
 func (c *Config) IsFirstRun() bool {
 	return c.firstRun
+}
+
+// Warnings returns deferred warnings collected during Load (e.g. disabled LLMs).
+// Callers should drain these through the application logger after it is initialized.
+func (c *Config) Warnings() []string {
+	return c.warnings
 }
 
 // HasEnabledLLM returns true if at least one LLM is enabled

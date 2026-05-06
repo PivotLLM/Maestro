@@ -81,11 +81,35 @@ func main() {
 
 	// Announce startup
 	logger.Infof("%s v%s starting", global.ProgramName, global.Version)
+	logger.Infof("Using configuration file: %s", cfg.ConfigPath())
 
 	// Log first-run message
 	if cfg.IsFirstRun() {
 		logger.Infof("First run detected - created default configuration at %s", cfg.ConfigPath())
 		logger.Info("Please edit the configuration to enable LLMs and set API keys")
+	}
+
+	// Drain warnings collected during config load (before logger existed)
+	for _, w := range cfg.Warnings() {
+		logger.Warn(w)
+	}
+
+	// Log each configured LLM at DEBUG level (post-validation, so Enabled reflects executable checks)
+	for _, llm := range cfg.LLMs() {
+		status := "disabled"
+		if llm.Enabled {
+			status = "enabled"
+		}
+		outputFmt := llm.OutputFormat
+		if outputFmt == "" {
+			outputFmt = "generic"
+		}
+		llmType := llm.Type
+		if llmType == "" {
+			llmType = "command"
+		}
+		logger.Debugf("LLM %s: type=%s command=%q args=%v stdin=%v output_format=%s timeout=%ds [%s]",
+			llm.ID, llmType, llm.Command, llm.Args, llm.Stdin, outputFmt, llm.Timeout, status)
 	}
 
 	// Log warning if no LLMs are enabled
