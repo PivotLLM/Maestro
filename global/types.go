@@ -143,6 +143,7 @@ type WorkExecution struct {
 	LLMModelID             string     `json:"llm_model_id,omitempty"`
 	Status                 string     `json:"status"`
 	Error                  string     `json:"error,omitempty"`
+	ErrorCode              string     `json:"error_code,omitempty"`      // Machine-readable failure code (e.g. "no_llm_enabled")
 	Invocations            int        `json:"invocations"`               // Number of worker LLM invocations (any exit code)
 	InfraRetries           int        `json:"infra_retries,omitempty"`   // Infrastructure failures (couldn't execute)
 	LastAttemptAt          *time.Time `json:"last_attempt_at,omitempty"` // For retry delay calculation
@@ -211,8 +212,9 @@ type WorkerResult struct {
 	Response    string `json:"response"`    // Full LLM response
 	LLMModelID  string `json:"llm_model_id"`
 	Invocations int    `json:"invocations"`
-	Status      string `json:"status"` // done/failed
-	Error       string `json:"error,omitempty"`
+	Status      string `json:"status"`               // done/failed
+	Error       string `json:"error,omitempty"`      // Human-readable error message
+	ErrorCode   string `json:"error_code,omitempty"` // Machine-readable failure code (e.g. "no_llm_enabled")
 }
 
 // QAResult contains the complete audit trail for QA execution
@@ -310,9 +312,10 @@ type TaskResultGetResponse struct {
 	WorkerResponseSchema   string `json:"worker_response_schema,omitempty"` // Actual schema content for supervisor updates
 
 	// Worker result
-	WorkerStatus   string `json:"worker_status"`
-	WorkerResponse string `json:"worker_response"`
-	WorkerError    string `json:"worker_error,omitempty"`
+	WorkerStatus    string `json:"worker_status"`
+	WorkerResponse  string `json:"worker_response"`
+	WorkerError     string `json:"worker_error,omitempty"`
+	WorkerErrorCode string `json:"worker_error_code,omitempty"`
 
 	// QA result (if enabled)
 	QAEnabled  bool   `json:"qa_enabled"`

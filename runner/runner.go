@@ -1324,7 +1324,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 			} else {
 				r.logToProject(project, fmt.Sprintf("Task %d: Failed - no LLMs are enabled", task.ID))
 				r.logger.Errorf("Task %d: Failed - no LLMs are enabled", task.ID)
-				result.TasksSkipped++
+				r.failTaskPreExecution(project, task, "no_llm_enabled", "no LLMs are enabled", result)
 				return
 			}
 		}
@@ -1799,7 +1799,7 @@ func (r *Runner) finishTaskWithInfraError(project, path string, task *global.Tas
 	}
 
 	// Write result file with history for debugging
-	r.writeFailedTaskResult(project, task, fullPrompt, "", finalError)
+	r.writeFailedTaskResult(project, task, fullPrompt, "", finalError, "infra_max_retries_exceeded")
 
 	result.TasksFailed++
 }
@@ -1835,7 +1835,7 @@ func (r *Runner) finishTask(project, path string, task *global.Task, response, e
 
 		// Write result file with history for debugging (only on final failure)
 		if isFinalFailure {
-			r.writeFailedTaskResult(project, task, fullPrompt, response, errorMsg)
+			r.writeFailedTaskResult(project, task, fullPrompt, response, errorMsg, "max_invocations_exceeded")
 		}
 	} else {
 		// Validate response against task set schema if configured (skip if SkipValidation=true).
@@ -1915,7 +1915,7 @@ func (r *Runner) finishTask(project, path string, task *global.Task, response, e
 
 					// Write result file with history for final failures
 					if !canRetry {
-						r.writeFailedTaskResult(project, task, fullPrompt, response, historyMsg)
+						r.writeFailedTaskResult(project, task, fullPrompt, response, historyMsg, errorType)
 					}
 					return
 				}
@@ -1991,8 +1991,36 @@ func (r *Runner) finishTask(project, path string, task *global.Task, response, e
 	}
 }
 
-// writeFailedTaskResult writes a result file for a failed task, preserving history for debugging
-func (r *Runner) writeFailedTaskResult(project string, task *global.Task, fullPrompt, response, errorMsg string) {
+// failTaskPreExecution marks a task as terminally failed before any LLM execution
+// can be attempted (e.g. no enabled LLMs). It updates the task status, writes a
+// failure result file, and increments the run's TasksFailed counter.
+func (r *Runner) failTaskPreExecution(project string, task *global.Task, errorCode, errorMsg string, result *global.RunResult) {
+	updates := map[string]interface{}{
+		"work": map[string]interface{}{
+			"status":     global.ExecutionStatusFailed,
+			"error":      errorMsg,
+			"error_code": errorCode,
+		},
+	}
+	if _, err := r.tasks.UpdateTask(project, task.UUID, updates); err != nil {
+		r.logger.Errorf("Task %d: Failed to save pre-execution failed status: %v", task.ID, err)
+	}
+
+	// Mirror the persisted state on the in-memory copy for any subsequent reads.
+	task.Work.Status = global.ExecutionStatusFailed
+	task.Work.Error = errorMsg
+	task.Work.ErrorCode = errorCode
+
+	r.writeFailedTaskResult(project, task, "", "", errorMsg, errorCode)
+
+	if result != nil {
+		result.TasksFailed++
+	}
+}
+
+// writeFailedTaskResult writes a result file for a failed task, preserving history for debugging.
+// errorCode is an optional machine-readable failure code (empty when not classified).
+func (r *Runner) writeFailedTaskResult(project string, task *global.Task, fullPrompt, response, errorMsg, errorCode string) {
 	now := time.Now()
 
 	taskResult := global.TaskResult{
@@ -2013,6 +2041,7 @@ func (r *Runner) writeFailedTaskResult(project string, task *global.Task, fullPr
 			Invocations:            task.Work.Invocations,
 			Status:                 global.ExecutionStatusFailed,
 			Error:                  errorMsg,
+			ErrorCode:              errorCode,
 		},
 		History: r.getTaskHistory(task.UUID),
 	}
@@ -3166,26 +3195,42 @@ func (r *Runner) generateAndSaveReport(project, pathFilter string) ([]string, er
 	return generatedReports, nil
 }
 
+// Callback event types. The "completed" event is fired when every task in the
+// taskset reached the done state; "failed" is fired when any task ended in a
+// non-done terminal state.
+const (
+	callbackEventCompleted = "completed"
+	callbackEventFailed    = "failed"
+)
+
 // callbackTask represents a single task's status in a callback payload
 type callbackTask struct {
 	ID                   int    `json:"id"`
 	UUID                 string `json:"uuid"`
 	Title                string `json:"title"`
 	Status               string `json:"status"`
+	Error                string `json:"error,omitempty"`      // Human-readable failure message (empty on success)
+	ErrorCode            string `json:"error_code,omitempty"` // Machine-readable failure code (empty on success)
 	RetrievalInstruction string `json:"retrieval_instruction"`
 }
 
 // callbackPayload is the JSON body sent to a callback URL
 type callbackPayload struct {
-	Project     string         `json:"project"`
-	Path        string         `json:"path"`
-	Description string         `json:"description,omitempty"`
-	CompletedAt time.Time      `json:"completed_at"`
-	Tasks       []callbackTask `json:"tasks"`
+	Event        string         `json:"event"` // "completed" or "failed"
+	Project      string         `json:"project"`
+	Path         string         `json:"path"`
+	Description  string         `json:"description,omitempty"`
+	CompletedAt  time.Time      `json:"completed_at"`
+	Error        string         `json:"error,omitempty"`         // Machine-readable failure code (event=failed only)
+	ErrorMessage string         `json:"error_message,omitempty"` // Human-readable failure message (event=failed only)
+	Tasks        []callbackTask `json:"tasks"`
 }
 
 // sendCallback fires a POST callback to the taskset's CallbackURL with final task statuses.
 // description is the caller-supplied dispatch description (empty for non-dispatch runs).
+// The event field and top-level error info are derived from the reloaded task statuses:
+// "completed" if every task is done, otherwise "failed" with the first non-done task's
+// error_code/error surfaced at the payload root.
 // Errors are logged but do not affect execution (fire and forget).
 func (r *Runner) sendCallback(project string, ts *global.TaskSet, description string) {
 	// Reload the taskset from disk to get final per-task statuses
@@ -3195,22 +3240,42 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 		return
 	}
 
-	payload := callbackPayload{
-		Project:     project,
-		Path:        reloaded.Path,
-		Description: description,
-		CompletedAt: time.Now(),
-		Tasks:       make([]callbackTask, 0, len(reloaded.Tasks)),
-	}
+	event := callbackEventCompleted
+	var topErrorCode, topErrorMessage string
+	tasks := make([]callbackTask, 0, len(reloaded.Tasks))
 
 	for _, task := range reloaded.Tasks {
-		payload.Tasks = append(payload.Tasks, callbackTask{
+		if task.Work.Status != global.ExecutionStatusDone {
+			if event == callbackEventCompleted {
+				event = callbackEventFailed
+				topErrorCode = task.Work.ErrorCode
+				topErrorMessage = task.Work.Error
+			}
+		}
+		tasks = append(tasks, callbackTask{
 			ID:                   task.ID,
 			UUID:                 task.UUID,
 			Title:                task.Title,
 			Status:               task.Work.Status,
+			Error:                task.Work.Error,
+			ErrorCode:            task.Work.ErrorCode,
 			RetrievalInstruction: fmt.Sprintf(`To retrieve the task result, call: task_result_get with project="%s" and uuid="%s"`, project, task.UUID),
 		})
+	}
+
+	if event == callbackEventFailed && topErrorCode == "" {
+		topErrorCode = "task_failed"
+	}
+
+	payload := callbackPayload{
+		Event:        event,
+		Project:      project,
+		Path:         reloaded.Path,
+		Description:  description,
+		CompletedAt:  time.Now(),
+		Error:        topErrorCode,
+		ErrorMessage: topErrorMessage,
+		Tasks:        tasks,
 	}
 
 	data, err := json.Marshal(payload)
@@ -3228,9 +3293,9 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		r.logger.Warnf("Callback: POST to %s returned status %d", ts.CallbackURL, resp.StatusCode)
+		r.logger.Warnf("Callback: POST to %s returned status %d (event=%s)", ts.CallbackURL, resp.StatusCode, event)
 	} else {
-		r.logger.Infof("Callback: POST to %s returned status %d", ts.CallbackURL, resp.StatusCode)
+		r.logger.Infof("Callback: POST to %s returned status %d (event=%s)", ts.CallbackURL, resp.StatusCode, event)
 	}
 }
 
@@ -3323,10 +3388,20 @@ func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
 	go func() {
 		defer r.activeRuns.Done()
 
+		// Always remove the dispatch lock file when the goroutine exits.
+		// flock leaves the lock file on disk after Unlock; for short-lived dispatch
+		// tasksets we own the full lifecycle so cleanup is safe and prevents leaks.
+		defer func() {
+			if err := r.tasks.RemoveTaskSetLock(req.Project, path); err != nil {
+				r.logger.Warnf("Dispatch: failed to remove lock file for %s: %v", path, err)
+			}
+		}()
+
 		// Load the task (fresh from disk)
 		taskInfo, taskSetPath, err := r.tasks.GetTask(req.Project, task.UUID)
 		if err != nil {
 			r.logger.Errorf("Dispatch: failed to load task %s: %v", task.UUID, err)
+			r.dispatchCallback(req.Project, path, req.Description, callbackURL)
 			return
 		}
 
@@ -3337,16 +3412,35 @@ func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
 
 		r.executeTask(context.Background(), req.Project, taskSetPath, taskInfo, localResult, budget, limits)
 
-		// Fire callback if configured
-		if callbackURL != "" {
-			ts, err := r.tasks.GetTaskSet(req.Project, path)
-			if err != nil {
-				r.logger.Errorf("Dispatch: failed to load taskset for callback: %v", err)
-				return
+		// Dispatch is single-shot; any non-terminal state after executeTask
+		// (e.g. a buildPrompt failure that left the task in 'waiting' for retry)
+		// must be coerced to 'failed' so the callback and result file are correct.
+		if reloaded, _, getErr := r.tasks.GetTask(req.Project, task.UUID); getErr == nil {
+			if reloaded.Work.Status != global.ExecutionStatusDone && reloaded.Work.Status != global.ExecutionStatusFailed {
+				errorMsg := reloaded.Work.Error
+				if errorMsg == "" {
+					errorMsg = fmt.Sprintf("dispatch ended in non-terminal state %q", reloaded.Work.Status)
+				}
+				r.failTaskPreExecution(req.Project, reloaded, "dispatch_incomplete", errorMsg, nil)
 			}
-			r.sendCallback(req.Project, ts, req.Description)
 		}
+
+		r.dispatchCallback(req.Project, path, req.Description, callbackURL)
 	}()
 
 	return result, nil
+}
+
+// dispatchCallback loads the taskset and fires the callback if a URL is configured.
+// Any errors are logged; this is fire-and-forget.
+func (r *Runner) dispatchCallback(project, path, description, callbackURL string) {
+	if callbackURL == "" {
+		return
+	}
+	ts, err := r.tasks.GetTaskSet(project, path)
+	if err != nil {
+		r.logger.Errorf("Dispatch: failed to load taskset for callback: %v", err)
+		return
+	}
+	r.sendCallback(project, ts, description)
 }
