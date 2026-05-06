@@ -3221,7 +3221,7 @@ type callbackPayload struct {
 	Path         string         `json:"path"`
 	Description  string         `json:"description,omitempty"`
 	CompletedAt  time.Time      `json:"completed_at"`
-	Error        string         `json:"error,omitempty"`         // Machine-readable failure code (event=failed only)
+	ErrorCode    string         `json:"error_code,omitempty"`    // Machine-readable failure code (event=failed only)
 	ErrorMessage string         `json:"error_message,omitempty"` // Human-readable failure message (event=failed only)
 	Tasks        []callbackTask `json:"tasks"`
 }
@@ -3230,7 +3230,7 @@ type callbackPayload struct {
 // description is the caller-supplied dispatch description (empty for non-dispatch runs).
 // The event field and top-level error info are derived from the reloaded task statuses:
 // "completed" if every task is done, otherwise "failed" with the first non-done task's
-// error_code/error surfaced at the payload root.
+// error_code/error_message surfaced at the payload root.
 // Errors are logged but do not affect execution (fire and forget).
 func (r *Runner) sendCallback(project string, ts *global.TaskSet, description string) {
 	// Reload the taskset from disk to get final per-task statuses
@@ -3273,7 +3273,7 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 		Path:         reloaded.Path,
 		Description:  description,
 		CompletedAt:  time.Now(),
-		Error:        topErrorCode,
+		ErrorCode:    topErrorCode,
 		ErrorMessage: topErrorMessage,
 		Tasks:        tasks,
 	}
@@ -3379,56 +3379,61 @@ func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
 		Message:              "Task dispatched and running asynchronously",
 	}
 
-	// Get the taskset for the goroutine (needed to fire callback)
-	callbackURL := req.CallbackURL
-
 	// Execute asynchronously - does NOT use runningProjects lock so dispatches
 	// run concurrently with regular runs and other dispatches
 	r.activeRuns.Add(1)
-	go func() {
-		defer r.activeRuns.Done()
-
-		// Always remove the dispatch lock file when the goroutine exits.
-		// flock leaves the lock file on disk after Unlock; for short-lived dispatch
-		// tasksets we own the full lifecycle so cleanup is safe and prevents leaks.
-		defer func() {
-			if err := r.tasks.RemoveTaskSetLock(req.Project, path); err != nil {
-				r.logger.Warnf("Dispatch: failed to remove lock file for %s: %v", path, err)
-			}
-		}()
-
-		// Load the task (fresh from disk)
-		taskInfo, taskSetPath, err := r.tasks.GetTask(req.Project, task.UUID)
-		if err != nil {
-			r.logger.Errorf("Dispatch: failed to load task %s: %v", task.UUID, err)
-			r.dispatchCallback(req.Project, path, req.Description, callbackURL)
-			return
-		}
-
-		// Use default limits for dispatch tasks
-		limits := r.config.Runner().Limits.WithDefaults()
-		budget := r.newRunBudget([]*global.Task{taskInfo}, limits, 0.10)
-		localResult := &global.RunResult{}
-
-		r.executeTask(context.Background(), req.Project, taskSetPath, taskInfo, localResult, budget, limits)
-
-		// Dispatch is single-shot; any non-terminal state after executeTask
-		// (e.g. a buildPrompt failure that left the task in 'waiting' for retry)
-		// must be coerced to 'failed' so the callback and result file are correct.
-		if reloaded, _, getErr := r.tasks.GetTask(req.Project, task.UUID); getErr == nil {
-			if reloaded.Work.Status != global.ExecutionStatusDone && reloaded.Work.Status != global.ExecutionStatusFailed {
-				errorMsg := reloaded.Work.Error
-				if errorMsg == "" {
-					errorMsg = fmt.Sprintf("dispatch ended in non-terminal state %q", reloaded.Work.Status)
-				}
-				r.failTaskPreExecution(req.Project, reloaded, "dispatch_incomplete", errorMsg, nil)
-			}
-		}
-
-		r.dispatchCallback(req.Project, path, req.Description, callbackURL)
-	}()
+	go r.runDispatchExecution(req, task, path, r.tasks.GetTask)
 
 	return result, nil
+}
+
+// runDispatchExecution runs the dispatched task and fires the callback. It owns
+// the activeRuns counter and the dispatch lock cleanup. Extracted from RunDispatch
+// so tests can drive specific failure paths (e.g. GetTask failing after a successful
+// CreateTask) deterministically by injecting initialLoadTask.
+func (r *Runner) runDispatchExecution(req *DispatchRequest, task *global.Task, path string,
+	initialLoadTask func(project, taskUUID string) (*global.Task, string, error)) {
+	defer r.activeRuns.Done()
+
+	// Always remove the dispatch lock file when the goroutine exits.
+	// flock leaves the lock file on disk after Unlock; for short-lived dispatch
+	// tasksets we own the full lifecycle so cleanup is safe and prevents leaks.
+	defer func() {
+		if err := r.tasks.RemoveTaskSetLock(req.Project, path); err != nil {
+			r.logger.Warnf("Dispatch: failed to remove lock file for %s: %v", path, err)
+		}
+	}()
+
+	// Load the task (fresh from disk)
+	taskInfo, taskSetPath, err := initialLoadTask(req.Project, task.UUID)
+	if err != nil {
+		r.logger.Errorf("Dispatch: failed to load task %s: %v", task.UUID, err)
+		r.failTaskPreExecution(req.Project, task, "task_load_failed", err.Error(), nil)
+		r.dispatchCallback(req.Project, path, req.Description, req.CallbackURL)
+		return
+	}
+
+	// Use default limits for dispatch tasks
+	limits := r.config.Runner().Limits.WithDefaults()
+	budget := r.newRunBudget([]*global.Task{taskInfo}, limits, 0.10)
+	localResult := &global.RunResult{}
+
+	r.executeTask(context.Background(), req.Project, taskSetPath, taskInfo, localResult, budget, limits)
+
+	// Dispatch is single-shot; any non-terminal state after executeTask
+	// (e.g. a buildPrompt failure that left the task in 'waiting' for retry)
+	// must be coerced to 'failed' so the callback and result file are correct.
+	if reloaded, _, getErr := r.tasks.GetTask(req.Project, task.UUID); getErr == nil {
+		if reloaded.Work.Status != global.ExecutionStatusDone && reloaded.Work.Status != global.ExecutionStatusFailed {
+			errorMsg := reloaded.Work.Error
+			if errorMsg == "" {
+				errorMsg = fmt.Sprintf("dispatch ended in non-terminal state %q", reloaded.Work.Status)
+			}
+			r.failTaskPreExecution(req.Project, reloaded, "dispatch_incomplete", errorMsg, nil)
+		}
+	}
+
+	r.dispatchCallback(req.Project, path, req.Description, req.CallbackURL)
 }
 
 // dispatchCallback loads the taskset and fires the callback if a URL is configured.
