@@ -168,6 +168,7 @@ func (s *Server) handleTaskResultGet(_ context.Context, req mcp.CallToolRequest)
 				WorkerResponseSchema:   schemaContent,
 				WorkerStatus:           task.Work.Status,
 				WorkerError:            task.Work.Error,
+				WorkerErrorCode:        task.Work.ErrorCode,
 				QAEnabled:              task.QA.Enabled,
 			}
 			return createJSONResult(response)
@@ -192,6 +193,7 @@ func (s *Server) handleTaskResultGet(_ context.Context, req mcp.CallToolRequest)
 		WorkerStatus:           taskResult.Worker.Status,
 		WorkerResponse:         taskResult.Worker.Response,
 		WorkerError:            taskResult.Worker.Error,
+		WorkerErrorCode:        taskResult.Worker.ErrorCode,
 		QAEnabled:              task.QA.Enabled,
 		SupervisorOverride:     taskResult.SupervisorOverride,
 		CompletedAt:            taskResult.CompletedAt,

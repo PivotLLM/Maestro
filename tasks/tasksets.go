@@ -666,6 +666,9 @@ func (s *Service) UpdateTask(project, taskUUID string, updates map[string]interf
 			if errMsg, ok := workUpdates["error"].(string); ok {
 				task.Work.Error = errMsg
 			}
+			if errCode, ok := workUpdates["error_code"].(string); ok {
+				task.Work.ErrorCode = errCode
+			}
 			if invocations, ok := workUpdates["invocations"].(int); ok {
 				task.Work.Invocations = invocations
 			}
@@ -833,6 +836,18 @@ func findTaskByUUID(tasks []global.Task, taskUUID string) (int, *global.Task) {
 // GetResultsDir returns the results directory for a project
 func (s *Service) GetResultsDir(project string) string {
 	return s.projects.GetResultsDir(project)
+}
+
+// RemoveTaskSetLock deletes the on-disk lock file for a task set.
+// The flock library does not auto-clean its lock files; callers that own
+// the full lifecycle of a task set (e.g. dispatch) use this to avoid leaks.
+// Missing files are ignored.
+func (s *Service) RemoveTaskSetLock(project, path string) error {
+	lockPath := s.getLockPath(project, path)
+	if err := os.Remove(lockPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // AppendLog appends a message to the project log
