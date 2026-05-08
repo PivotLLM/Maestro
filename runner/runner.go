@@ -1274,7 +1274,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 			errMsg := fmt.Sprintf("PANIC in task execution: %v", rec)
 			r.logger.Errorf("Task %d: %s", task.ID, errMsg)
 			r.logToProject(project, fmt.Sprintf("Task %d crashed: %v", task.ID, rec))
-			r.finishTask(project, path, task, "", errMsg, "", "", result, limits)
+			r.finishTask(project, path, task, "", errMsg, "", "", result, limits, false, "")
 		}
 	}()
 
@@ -1289,7 +1289,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	resultPath := filepath.Join(resultsDir, task.UUID+".json")
 	if data, err := os.ReadFile(resultPath); err == nil {
 		var existingResult global.TaskResult
-		if err := json.Unmarshal(data, &existingResult); err == nil && existingResult.Worker.Response != "" {
+		if err := json.Unmarshal(data, &existingResult); err == nil && existingResult.Worker.Status == global.ExecutionStatusDone {
 			// Work already completed - skip to QA workflow if needed
 			r.logger.Infof("Task %d: Work already completed (found existing result), checking QA status", task.ID)
 			r.logToProject(project, fmt.Sprintf("Task %d: Work already completed, checking QA", task.ID))
@@ -1364,7 +1364,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		r.logger.Errorf("Task %d: Failed to build prompt: %v", task.ID, err)
 		r.logToProject(project, fmt.Sprintf("Task %d: Failed to build prompt: %v", task.ID, err))
 		r.recordHistory(project, task.UUID, "system", "error", fmt.Sprintf("Failed to build prompt: %v", err), "", task.Work.Invocations)
-		r.finishTask(project, path, task, "", err.Error(), "", "", result, limits)
+		r.finishTask(project, path, task, "", err.Error(), "", "", result, limits, false, "")
 		return
 	}
 	promptSize := len(fullPrompt)
@@ -1377,7 +1377,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	if !budget.checkAndIncrement() {
 		r.logger.Warnf("Task %d: LLM budget exceeded, skipping", task.ID)
 		r.logToProject(project, fmt.Sprintf("Task %d: LLM budget exceeded, skipping", task.ID))
-		r.finishTask(project, path, task, "", "LLM budget exceeded", fullPrompt, "", result, limits)
+		r.finishTask(project, path, task, "", "LLM budget exceeded", fullPrompt, "", result, limits, false, "")
 		return
 	}
 
@@ -1453,7 +1453,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		// Check if we're under the invocation limit
 		if task.Work.Invocations >= limits.MaxWorker {
 			r.logger.Errorf("Task %d: Max worker invocations (%d) exceeded", task.ID, limits.MaxWorker)
-			r.finishTask(project, path, task, "", errorMsg, fullPrompt, dispatchResult.Stderr, result, limits)
+			r.finishTask(project, path, task, "", errorMsg, fullPrompt, dispatchResult.Stderr, result, limits, false, "")
 		} else {
 			// Schedule retry
 			r.logger.Infof("Task %d: Will retry (%d/%d worker invocations)", task.ID, task.Work.Invocations, limits.MaxWorker)
@@ -1472,13 +1472,13 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		return
 	}
 
-	// Success - use parsed Text as response, fall back to raw Stdout
+	// Success - use parsed Text as response; only fall back to raw Stdout if parsing did not succeed
 	response := dispatchResult.Text
-	if response == "" {
+	if response == "" && !dispatchResult.ResponseParsed {
 		response = dispatchResult.Stdout
 	}
 	r.logger.Infof("Task %d: Saving result", task.ID)
-	r.finishTask(project, path, task, response, "", fullPrompt, dispatchResult.Stderr, result, limits)
+	r.finishTask(project, path, task, response, "", fullPrompt, dispatchResult.Stderr, result, limits, dispatchResult.NormalTermination, dispatchResult.StopReason)
 
 	// Check if QA is enabled after successful work completion
 	if task.QA.Enabled && task.Work.Status == global.ExecutionStatusDone {
@@ -1806,7 +1806,8 @@ func (r *Runner) finishTaskWithInfraError(project, path string, task *global.Tas
 
 // finishTask completes a task with success or failure
 // llmStderr is optional stderr output from LLM command (pass empty string if not applicable)
-func (r *Runner) finishTask(project, path string, task *global.Task, response, errorMsg, fullPrompt, llmStderr string, result *global.RunResult, limits global.Limits) {
+// normalTermination and stopReason describe how the LLM terminated (only meaningful on success path)
+func (r *Runner) finishTask(project, path string, task *global.Task, response, errorMsg, fullPrompt, llmStderr string, result *global.RunResult, limits global.Limits, normalTermination bool, stopReason string) {
 	now := time.Now()
 
 	updates := make(map[string]interface{})
@@ -1956,6 +1957,8 @@ func (r *Runner) finishTask(project, path string, task *global.Task, response, e
 				LLMModelID:             task.Work.LLMModelID,
 				Invocations:            task.Work.Invocations,
 				Status:                 global.ExecutionStatusDone,
+				NormalTermination:      normalTermination,
+				StopReason:             stopReason,
 			},
 			History: r.getTaskHistory(task.UUID),
 		}
@@ -2976,9 +2979,9 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, budget *run
 		return fmt.Errorf("LLM call failed: %w", err)
 	}
 
-	// Extract response text using parsed output, fall back to raw stdout
+	// Extract response text using parsed output; only fall back to raw stdout if parsing did not succeed
 	response := dispatchResult.Text
-	if response == "" {
+	if response == "" && !dispatchResult.ResponseParsed {
 		response = dispatchResult.Stdout
 	}
 

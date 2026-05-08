@@ -48,13 +48,16 @@ type DispatchOptions struct {
 // This is returned when the LLM command was invoked (any exit code).
 // For infrastructure failures (command not found, permission denied), Dispatch returns (nil, error).
 type DispatchResult struct {
-	ExitCode     int    `json:"exit_code"`               // Command exit code (0 = success, non-zero = LLM error)
-	Stdout       string `json:"stdout"`                  // Raw stdout (ALWAYS captured)
-	Stderr       string `json:"stderr"`                  // Raw stderr (ALWAYS captured)
-	Text         string `json:"text,omitempty"`          // Parser-extracted response text
-	IsError      bool   `json:"is_error,omitempty"`      // LLM reported an error in its output envelope
-	TurnCount    int    `json:"turn_count,omitempty"`    // Number of turns (0 if not reported)
-	ResponseSize int    `json:"response_size,omitempty"` // Size of stdout in bytes
+	ExitCode          int    `json:"exit_code"`                        // Command exit code (0 = success, non-zero = LLM error)
+	Stdout            string `json:"stdout"`                           // Raw stdout (ALWAYS captured)
+	Stderr            string `json:"stderr"`                           // Raw stderr (ALWAYS captured)
+	Text              string `json:"text,omitempty"`                   // Parser-extracted response text
+	IsError           bool   `json:"is_error,omitempty"`               // LLM reported an error in its output envelope
+	TurnCount         int    `json:"turn_count,omitempty"`             // Number of turns (0 if not reported)
+	ResponseSize      int    `json:"response_size,omitempty"`          // Size of stdout in bytes
+	ResponseParsed    bool   `json:"response_parsed,omitempty"`        // true when response was successfully extracted from structured envelope
+	NormalTermination bool   `json:"normal_termination,omitempty"`     // true when LLM completed normally
+	StopReason        string `json:"stop_reason,omitempty"`            // non-empty only on abnormal termination
 }
 
 // NewService creates a new LLM service
@@ -455,15 +458,24 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 	// Parse stdout according to the LLM's configured output format
 	parsed := parseOutput(llm.GetOutputFormat(), output)
 
+	// Exit code always overrides NormalTermination
+	normalTermination := parsed.NormalTermination
+	if exitCode != 0 {
+		normalTermination = false
+	}
+
 	// Build result - always include Stdout and Stderr
 	result := &DispatchResult{
-		ExitCode:     exitCode,
-		Stdout:       output,
-		Stderr:       stderrOutput,
-		Text:         parsed.Text,
-		IsError:      parsed.IsError,
-		TurnCount:    parsed.TurnCount,
-		ResponseSize: responseSize,
+		ExitCode:          exitCode,
+		Stdout:            output,
+		Stderr:            stderrOutput,
+		Text:              parsed.Text,
+		IsError:           parsed.IsError,
+		TurnCount:         parsed.TurnCount,
+		ResponseSize:      responseSize,
+		ResponseParsed:    parsed.ResponseParsed,
+		NormalTermination: normalTermination,
+		StopReason:        parsed.StopReason,
 	}
 
 	if exitCode != 0 {

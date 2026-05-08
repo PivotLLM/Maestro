@@ -208,13 +208,15 @@ type WorkerResult struct {
 	TaskPrompt             string `json:"task_prompt,omitempty"`
 
 	// What was actually sent/received
-	FullPrompt  string `json:"full_prompt"` // Complete constructed prompt sent to LLM
-	Response    string `json:"response"`    // Full LLM response
-	LLMModelID  string `json:"llm_model_id"`
-	Invocations int    `json:"invocations"`
-	Status      string `json:"status"`               // done/failed
-	Error       string `json:"error,omitempty"`      // Human-readable error message
-	ErrorCode   string `json:"error_code,omitempty"` // Machine-readable failure code (e.g. "no_llm_enabled")
+	FullPrompt        string `json:"full_prompt"`                      // Complete constructed prompt sent to LLM
+	Response          string `json:"response"`                         // Full LLM response
+	LLMModelID        string `json:"llm_model_id"`
+	Invocations       int    `json:"invocations"`
+	Status            string `json:"status"`                           // done/failed
+	Error             string `json:"error,omitempty"`                  // Human-readable error message
+	ErrorCode         string `json:"error_code,omitempty"`             // Machine-readable failure code (e.g. "no_llm_enabled")
+	NormalTermination bool   `json:"normal_termination,omitempty"`     // true when LLM completed normally
+	StopReason        string `json:"stop_reason,omitempty"`            // non-empty only on abnormal termination
 }
 
 // QAResult contains the complete audit trail for QA execution
