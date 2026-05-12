@@ -50,6 +50,22 @@ type claudeUsageBlock struct {
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 }
 
+// claudeModelUsage mirrors a single entry in the envelope's modelUsage map.
+// Field names are camelCase (matching the Claude CLI envelope), distinct from
+// the snake_case top-level usage block. Missing fields decode to zero.
+type claudeModelUsage struct {
+	InputTokens              int `json:"inputTokens"`
+	OutputTokens             int `json:"outputTokens"`
+	CacheReadInputTokens     int `json:"cacheReadInputTokens"`
+	CacheCreationInputTokens int `json:"cacheCreationInputTokens"`
+}
+
+// total returns the sum of all token counts in this entry. Missing fields are
+// already zero from JSON decoding, so this is safe even on partial entries.
+func (m claudeModelUsage) total() int {
+	return m.InputTokens + m.OutputTokens + m.CacheReadInputTokens + m.CacheCreationInputTokens
+}
+
 // claudeResultLine represents a single line of Claude CLI JSONL output.
 // Claude with --output-format json produces JSONL; the line with type "result"
 // contains the actual response text plus usage, cost, duration, and stop_reason.
@@ -63,10 +79,16 @@ type claudeResultLine struct {
 	StopReason   string           `json:"stop_reason"`
 	TotalCostUSD float64          `json:"total_cost_usd"`
 	Usage        claudeUsageBlock `json:"usage"`
-	// modelUsage is a map keyed by the actual provider-returned model name,
-	// e.g. "claude-haiku-4-5-20251001". We use the first/only key to surface
-	// ProviderModel uniformly with other parsers.
-	ModelUsage map[string]json.RawMessage `json:"modelUsage"`
+	// Model is the envelope's top-level model field. Claude CLI sets this to
+	// the *last* model used in the turn, which is often a helper tier even when
+	// the bulk of work ran on a higher-tier model. Used only as a fallback when
+	// modelUsage is missing, empty, or all-zero.
+	Model string `json:"model"`
+	// ModelUsage is keyed by the actual provider-returned model name (e.g.
+	// "claude-opus-4-7[1m]", "claude-haiku-4-5-20251001"). Each value carries
+	// per-model token counts. We pick the model with the highest total tokens
+	// as the primary model for ProviderModel reporting.
+	ModelUsage map[string]claudeModelUsage `json:"modelUsage"`
 }
 
 // geminiCliJSONResponse represents the JSON output from the gemini CLI with --output-format json.
@@ -172,15 +194,16 @@ func parseClaudeOutput(stdout string) ParsedOutput {
 			}
 		}
 
-		// modelUsage is keyed by the actual provider-returned model name.
-		// In practice Claude emits exactly one key per response. Pick the
-		// first one deterministically — for single-key maps this is fine,
-		// and multi-key responses are not observed in current versions.
-		providerModel := ""
-		for k := range r.ModelUsage {
-			if providerModel == "" || k < providerModel {
-				providerModel = k
-			}
+		// Pick the primary model from modelUsage by highest total token count.
+		// Claude CLI's top-level "model" field reports the *last* model used in
+		// the turn — often a helper tier (e.g. haiku) even when the bulk of work
+		// ran on a higher-tier model (e.g. opus). The real breakdown lives in
+		// modelUsage. Ties are broken by lexicographically first key for
+		// deterministic output. Falls back to the top-level "model" field if
+		// modelUsage is missing, empty, or every entry has zero total tokens.
+		providerModel := primaryClaudeModel(r.ModelUsage)
+		if providerModel == "" {
+			providerModel = r.Model
 		}
 
 		return ParsedOutput{
@@ -206,6 +229,58 @@ func parseClaudeOutput(stdout string) ParsedOutput {
 	}
 
 	return ParsedOutput{Text: stdout}
+}
+
+// primaryClaudeModel selects the highest-usage model from a Claude CLI
+// envelope's modelUsage map and returns its bare model ID.
+//
+// Selection rules:
+//   - Per-model total = sum of all token-count fields present (defensive: any
+//     missing field decodes to zero).
+//   - The model with the largest total wins.
+//   - Ties are broken by lexicographically first key, for deterministic output.
+//   - Entries with a zero total are ignored. If every entry is zero (or the map
+//     is empty/nil) the function returns "" so the caller can fall back to the
+//     envelope's headline "model" field.
+//
+// The returned name has any trailing context-window suffix (e.g. "[1m]")
+// stripped so callers receive a bare model ID such as "claude-opus-4-7".
+func primaryClaudeModel(modelUsage map[string]claudeModelUsage) string {
+	var (
+		bestName  string
+		bestTotal int
+	)
+	for name, usage := range modelUsage {
+		total := usage.total()
+		if total <= 0 {
+			continue
+		}
+		switch {
+		case bestName == "":
+			bestName = name
+			bestTotal = total
+		case total > bestTotal:
+			bestName = name
+			bestTotal = total
+		case total == bestTotal && name < bestName:
+			bestName = name
+		}
+	}
+	return stripModelContextSuffix(bestName)
+}
+
+// stripModelContextSuffix removes a trailing bracketed context-window suffix
+// from a Claude model ID, e.g. "claude-opus-4-7[1m]" -> "claude-opus-4-7".
+// Returns the input unchanged if no such suffix is present.
+func stripModelContextSuffix(name string) string {
+	if !strings.HasSuffix(name, "]") {
+		return name
+	}
+	i := strings.LastIndex(name, "[")
+	if i <= 0 {
+		return name
+	}
+	return name[:i]
 }
 
 // parseGeminiOutput parses Gemini CLI JSON output (--output-format json).

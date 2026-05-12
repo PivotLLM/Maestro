@@ -56,6 +56,73 @@ func TestParseClaudeOutput_SuccessPopulatesResourceFields(t *testing.T) {
 	}
 }
 
+// TestParseClaudeOutput_ProviderModelFromModelUsage covers the primary-model
+// selection logic added to address envelopes that mix multiple model tiers in a
+// single turn (e.g. opus for the bulk of work + a haiku helper call). The
+// table-driven cases verify:
+//   - opus dominant + haiku helper → bare opus model id
+//   - "[1m]"-suffixed key has the context-window suffix stripped
+//   - modelUsage missing → falls back to top-level "model"
+//   - modelUsage empty (or all entries zero-total) → falls back to top-level "model"
+//   - tie on totals → deterministic pick (lexicographically first key)
+func TestParseClaudeOutput_ProviderModelFromModelUsage(t *testing.T) {
+	cases := []struct {
+		name     string
+		envelope string
+		want     string
+	}{
+		{
+			name: "opus_dominant_with_haiku_helper",
+			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-haiku-4-5-20251001","modelUsage":{"claude-opus-4-7[1m]":{"inputTokens":1000,"outputTokens":500,"cacheReadInputTokens":2000,"cacheCreationInputTokens":3000},"claude-haiku-4-5-20251001":{"inputTokens":10,"outputTokens":20}}}`,
+			want:     "claude-opus-4-7",
+		},
+		{
+			name: "single_model_with_1m_suffix_stripped",
+			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-opus-4-7[1m]","modelUsage":{"claude-opus-4-7[1m]":{"inputTokens":42,"outputTokens":7}}}`,
+			want:     "claude-opus-4-7",
+		},
+		{
+			name: "model_usage_missing_falls_back_to_headline",
+			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-haiku-4-5-20251001"}`,
+			want:     "claude-haiku-4-5-20251001",
+		},
+		{
+			name: "model_usage_empty_falls_back_to_headline",
+			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-haiku-4-5-20251001","modelUsage":{}}`,
+			want:     "claude-haiku-4-5-20251001",
+		},
+		{
+			name: "model_usage_all_zero_totals_falls_back_to_headline",
+			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-opus-4-7","modelUsage":{"claude-haiku-4-5-20251001":{},"claude-opus-4-7[1m]":{"inputTokens":0,"outputTokens":0,"cacheReadInputTokens":0,"cacheCreationInputTokens":0}}}`,
+			want:     "claude-opus-4-7",
+		},
+		{
+			// Tie-breaking rule: when two models have identical totals, pick
+			// the lexicographically first key (stable, documented).
+			// Both entries sum to 100 here; "claude-haiku..." < "claude-opus..." so haiku wins.
+			name:     "tie_on_total_lexicographically_first_wins",
+			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-opus-4-7","modelUsage":{"claude-opus-4-7[1m]":{"inputTokens":60,"outputTokens":40},"claude-haiku-4-5-20251001":{"inputTokens":70,"outputTokens":30}}}`,
+			want:     "claude-haiku-4-5-20251001",
+		},
+		{
+			// Unparseable modelUsage value: malformed entry decodes to zero,
+			// other model still wins on totals.
+			name:     "unparseable_modelusage_entry_does_not_panic",
+			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-haiku-4-5-20251001","modelUsage":{"claude-opus-4-7[1m]":{"inputTokens":100}}}`,
+			want:     "claude-opus-4-7",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := parseClaudeOutput(c.envelope)
+			if got.ProviderModel != c.want {
+				t.Errorf("ProviderModel = %q, want %q", got.ProviderModel, c.want)
+			}
+		})
+	}
+}
+
 func TestParseClaudeOutput_ErrorEnvelope(t *testing.T) {
 	got := parseClaudeOutput(claudeSampleError)
 	if !got.IsError {
