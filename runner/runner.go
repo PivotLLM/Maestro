@@ -407,31 +407,44 @@ func (r *Runner) recordHistoryPrompt(taskUUID, role, prompt, llmID string, invoc
 	r.taskHistory.Store(taskUUID, history)
 }
 
-// recordHistoryResponse records a response message to task history
+// recordHistoryResponse records a response message to task history.
+// Persists envelope-summary and resource-accounting fields from the
+// DispatchResult so callers downstream (and audit consumers reading
+// results/<uuid>.json) can see them.
 func (r *Runner) recordHistoryResponse(taskUUID, role string, result *llm.DispatchResult, llmID string, invocation int) {
 	exitCode := 0
-	var stdout, stderr string
-	var responseSize int
+	var msg global.Message
+	msg.Timestamp = time.Now()
+	msg.Role = role
+	msg.Invocation = invocation
+	msg.LLMModelID = llmID
+	msg.Type = "response" // Legacy field for compatibility
 
 	if result != nil {
 		exitCode = result.ExitCode
-		stdout = result.Stdout
-		stderr = result.Stderr
-		responseSize = result.ResponseSize
-	}
+		msg.Stdout = result.Stdout
+		msg.Stderr = result.Stderr
+		msg.Content = result.Stdout // Legacy field for compatibility
+		msg.ResponseSize = result.ResponseSize
 
-	msg := global.Message{
-		Timestamp:    time.Now(),
-		Role:         role,
-		Invocation:   invocation,
-		LLMModelID:   llmID,
-		ExitCode:     &exitCode,
-		Stdout:       stdout,
-		Stderr:       stderr,
-		ResponseSize: responseSize,
-		Type:         "response", // Legacy field for compatibility
-		Content:      stdout,     // Legacy field for compatibility
+		// Provider envelope summary
+		msg.ProviderModel = result.ProviderModel
+		msg.StopReason = result.StopReason
+		msg.IsError = result.IsError
+		msg.Success = result.Success
+		msg.NumTurns = result.NumTurns
+
+		// Resource accounting
+		msg.InputTokens = result.InputTokens
+		msg.OutputTokens = result.OutputTokens
+		msg.CacheReadTokens = result.CacheReadTokens
+		msg.CacheCreationTokens = result.CacheCreationTokens
+		msg.CostUSD = result.CostUSD
+		msg.DurationMs = result.DurationMs
+		msg.BytesSent = result.BytesSent
+		msg.BytesReceived = result.BytesReceived
 	}
+	msg.ExitCode = &exitCode
 
 	existing, _ := r.taskHistory.LoadOrStore(taskUUID, []global.Message{})
 	history := existing.([]global.Message)
@@ -477,6 +490,76 @@ func (r *Runner) recordHistory(project, taskUUID, role, msgType, content, llmID 
 	history := existing.([]global.Message)
 	history = append(history, msg)
 	r.taskHistory.Store(taskUUID, history)
+}
+
+// llmFinishErrorMaxLen caps the ErrorMsg field included in the "LLM finish"
+// log record so a verbose provider error doesn't blow out the log line.
+const llmFinishErrorMaxLen = 500
+
+// logLLMDispatch emits a structured "LLM dispatch" INFO record before
+// invoking an LLM. Mirrors the ClawEh dispatch logging shape.
+func (r *Runner) logLLMDispatch(taskID int, project, path, llmID string, promptBytes int) {
+	r.logger.Infof("LLM dispatch task_id=%d project=%q path=%q llm_id=%q prompt_bytes=%d",
+		taskID, project, path, llmID, promptBytes)
+}
+
+// logLLMFinish emits a structured "LLM finish" INFO record after an LLM
+// invocation returns, regardless of success or error. Mirrors the ClawEh
+// finish logging shape. errorMsg is truncated to llmFinishErrorMaxLen.
+func (r *Runner) logLLMFinish(taskID int, llmID string, result *llm.DispatchResult, errorMsg string) {
+	if result == nil {
+		// Shouldn't happen — but log what we have so we don't lose the event.
+		r.logger.Infof("LLM finish task_id=%d llm_id=%q error_msg=%q",
+			taskID, llmID, truncateForLog(errorMsg, llmFinishErrorMaxLen))
+		return
+	}
+	r.logger.Infof("LLM finish task_id=%d llm_id=%q provider_model=%q success=%t exit_code=%d is_error=%t stop_reason=%q num_turns=%d input_tokens=%d output_tokens=%d cache_read_tokens=%d cache_creation_tokens=%d cost_usd=%.6f duration_ms=%d bytes_sent=%d bytes_received=%d error_msg=%q",
+		taskID,
+		llmID,
+		result.ProviderModel,
+		result.Success,
+		result.ExitCode,
+		result.IsError,
+		result.StopReason,
+		result.NumTurns,
+		result.InputTokens,
+		result.OutputTokens,
+		result.CacheReadTokens,
+		result.CacheCreationTokens,
+		result.CostUSD,
+		result.DurationMs,
+		result.BytesSent,
+		result.BytesReceived,
+		truncateForLog(errorMsg, llmFinishErrorMaxLen),
+	)
+}
+
+// truncateForLog returns s truncated to at most maxLen runes, suffixed with a
+// "…(truncated)" marker when truncation occurs.
+func truncateForLog(s string, maxLen int) string {
+	if maxLen <= 0 || len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "…(truncated)"
+}
+
+// dispatchErrorMessage builds a human-readable error string for a
+// DispatchResult that the runner has decided to treat as a failure. It
+// distinguishes exit-code failures (existing wording preserved verbatim) from
+// envelope-only failures detected via DispatchResult.ProviderReportedError.
+func dispatchErrorMessage(result *llm.DispatchResult) string {
+	if result == nil {
+		return "LLM dispatch returned nil result"
+	}
+	if result.ExitCode != 0 {
+		msg := fmt.Sprintf("LLM exited with code %d", result.ExitCode)
+		if result.Stderr != "" {
+			msg += fmt.Sprintf(": %s", result.Stderr)
+		}
+		return msg
+	}
+	return fmt.Sprintf("LLM reported error envelope: stop_reason=%q is_error=%t",
+		result.StopReason, result.IsError)
 }
 
 // collectUniqueLLMs collects unique LLM IDs from tasks (worker + QA)
@@ -1399,6 +1482,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	}
 
 	r.logger.Infof("Task %d: Dispatching to LLM service", task.ID)
+	r.logLLMDispatch(task.ID, project, path, llmID, len(fullPrompt))
 	llmStartTime := time.Now()
 	dispatchResult, err := r.llm.Dispatch(dispatchReq)
 
@@ -1407,6 +1491,9 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		r.logger.Errorf("Task %d: Infrastructure error: %v", task.ID, err)
 		r.logToProject(project, fmt.Sprintf("Task %d: Infrastructure error: %v", task.ID, err))
 		r.recordHistoryError(task.UUID, "worker", err.Error(), llmID, task.Work.Invocations)
+		// Emit a finish record for the infra failure so log scrapes always
+		// see a paired dispatch/finish event.
+		r.logLLMFinish(task.ID, llmID, nil, err.Error())
 
 		// Increment infrastructure retry counter
 		task.Work.InfraRetries++
@@ -1433,27 +1520,34 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		return
 	}
 
-	// LLM was invoked - record response with full details
+	// LLM was invoked - record response with full details. Treat envelope
+	// errors (Codex turn.failed, Claude is_error, etc.) the same way as a
+	// non-zero exit code so they enter the retry path rather than the
+	// schema-validation path.
 	llmElapsed := time.Since(llmStartTime).Seconds()
-	r.logger.Infof("Task %d: LLM exited with code %d, returned %d bytes in %.1fs", task.ID, dispatchResult.ExitCode, dispatchResult.ResponseSize, llmElapsed)
-	r.logToProject(project, fmt.Sprintf("Task %d: LLM exited with code %d, returned %d bytes in %.1fs", task.ID, dispatchResult.ExitCode, dispatchResult.ResponseSize, llmElapsed))
+	providerError := dispatchResult.ProviderReportedError()
+	dispatchFailed := dispatchResult.ExitCode != 0 || providerError
+	finishErrMsg := ""
+	if dispatchFailed {
+		finishErrMsg = dispatchErrorMessage(dispatchResult)
+	}
+	r.logLLMFinish(task.ID, llmID, dispatchResult, finishErrMsg)
+	r.logToProject(project, fmt.Sprintf("Task %d: LLM finished exit_code=%d success=%t bytes_received=%d duration_ms=%d (wall=%.1fs)",
+		task.ID, dispatchResult.ExitCode, dispatchResult.Success, dispatchResult.BytesReceived, dispatchResult.DurationMs, llmElapsed))
 
 	// Record response in history with full DispatchResult
 	r.recordHistoryResponse(task.UUID, "worker", dispatchResult, llmID, task.Work.Invocations)
 
-	// Check for non-zero exit code (LLM error, not infrastructure)
-	if dispatchResult.ExitCode != 0 {
-		errorMsg := fmt.Sprintf("LLM exited with code %d", dispatchResult.ExitCode)
-		if dispatchResult.Stderr != "" {
-			errorMsg += fmt.Sprintf(": %s", dispatchResult.Stderr)
-		}
+	// Check for dispatch failure: non-zero exit code OR provider-reported error envelope.
+	if dispatchFailed {
+		errorMsg := finishErrMsg
 		r.logger.Warnf("Task %d: %s", task.ID, errorMsg)
 		r.logToProject(project, fmt.Sprintf("Task %d: %s", task.ID, errorMsg))
 
 		// Check if we're under the invocation limit
 		if task.Work.Invocations >= limits.MaxWorker {
 			r.logger.Errorf("Task %d: Max worker invocations (%d) exceeded", task.ID, limits.MaxWorker)
-			r.finishTask(project, path, task, "", errorMsg, fullPrompt, dispatchResult.Stderr, result, limits, false, "")
+			r.finishTask(project, path, task, "", errorMsg, fullPrompt, dispatchResult.Stderr, result, limits, false, dispatchResult.StopReason)
 		} else {
 			// Schedule retry
 			r.logger.Infof("Task %d: Will retry (%d/%d worker invocations)", task.ID, task.Work.Invocations, limits.MaxWorker)
@@ -2523,10 +2617,12 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 		Prompt: qaPrompt,
 	}
 
+	r.logLLMDispatch(task.ID, project, path, qaLLMID, len(qaPrompt))
 	qaLLMStartTime := time.Now()
 	dispatchResult, err := r.llm.Dispatch(dispatchReq)
 	if err != nil {
 		r.recordHistory(project, task.UUID, "system", "error", fmt.Sprintf("QA LLM call failed: %v", err), qaLLMID, task.QA.Invocations)
+		r.logLLMFinish(task.ID, qaLLMID, nil, err.Error())
 		return fmt.Errorf("QA LLM call failed: %w", err)
 	}
 
@@ -2537,7 +2633,7 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 	}
 
 	qaLLMElapsed := time.Since(qaLLMStartTime).Seconds()
-	r.logger.Infof("Task %d: QA LLM exited with code %d and returned %d bytes in %.1fs", task.ID, dispatchResult.ExitCode, len(qaResponse), qaLLMElapsed)
+	r.logLLMFinish(task.ID, qaLLMID, dispatchResult, "")
 	r.logToProject(project, fmt.Sprintf("Task %d: QA LLM exited with code %d and returned %d bytes in %.1fs", task.ID, dispatchResult.ExitCode, len(qaResponse), qaLLMElapsed))
 
 	// Record QA response in history with full DispatchResult (raw response before JSON extraction)
@@ -2962,10 +3058,12 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, budget *run
 		Prompt: fullPrompt,
 	}
 
+	r.logLLMDispatch(task.ID, project, path, llmID, len(fullPrompt))
 	revisionLLMStartTime := time.Now()
 	dispatchResult, err := r.llm.Dispatch(dispatchReq)
 	if err != nil {
 		r.recordHistory(project, task.UUID, "system", "error", fmt.Sprintf("Revision LLM call failed: %v", err), llmID, task.Work.Invocations)
+		r.logLLMFinish(task.ID, llmID, nil, err.Error())
 		// Update work with error
 		workUpdates = map[string]interface{}{
 			"work": map[string]interface{}{
@@ -2987,7 +3085,7 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, budget *run
 
 	responseSize := len(response)
 	revisionLLMElapsed := time.Since(revisionLLMStartTime).Seconds()
-	r.logger.Infof("Task %d: Work revision LLM exited with code %d and returned %d bytes in %.1fs", task.ID, dispatchResult.ExitCode, responseSize, revisionLLMElapsed)
+	r.logLLMFinish(task.ID, llmID, dispatchResult, "")
 	r.logToProject(project, fmt.Sprintf("Task %d: Work revision LLM exited with code %d and returned %d bytes in %.1fs", task.ID, dispatchResult.ExitCode, responseSize, revisionLLMElapsed))
 
 	// Record revision response in history with full DispatchResult (raw response before JSON extraction)
