@@ -48,16 +48,48 @@ type DispatchOptions struct {
 // This is returned when the LLM command was invoked (any exit code).
 // For infrastructure failures (command not found, permission denied), Dispatch returns (nil, error).
 type DispatchResult struct {
-	ExitCode          int    `json:"exit_code"`                        // Command exit code (0 = success, non-zero = LLM error)
-	Stdout            string `json:"stdout"`                           // Raw stdout (ALWAYS captured)
-	Stderr            string `json:"stderr"`                           // Raw stderr (ALWAYS captured)
-	Text              string `json:"text,omitempty"`                   // Parser-extracted response text
-	IsError           bool   `json:"is_error,omitempty"`               // LLM reported an error in its output envelope
-	TurnCount         int    `json:"turn_count,omitempty"`             // Number of turns (0 if not reported)
-	ResponseSize      int    `json:"response_size,omitempty"`          // Size of stdout in bytes
-	ResponseParsed    bool   `json:"response_parsed,omitempty"`        // true when response was successfully extracted from structured envelope
-	NormalTermination bool   `json:"normal_termination,omitempty"`     // true when LLM completed normally
-	StopReason        string `json:"stop_reason,omitempty"`            // non-empty only on abnormal termination
+	// Process
+	ExitCode int    `json:"exit_code"`      // Command exit code (0 = success, non-zero = LLM error)
+	Stdout   string `json:"stdout"`         // Raw stdout (ALWAYS captured)
+	Stderr   string `json:"stderr"`         // Raw stderr (ALWAYS captured)
+	Text     string `json:"text,omitempty"` // Parser-extracted response text
+
+	// Response envelope
+	IsError           bool   `json:"is_error,omitempty"`           // LLM reported an error in its output envelope
+	NumTurns          int    `json:"num_turns,omitempty"`          // Number of turns (0 if not reported)
+	ResponseSize      int    `json:"response_size,omitempty"`      // Size of stdout in bytes (== BytesReceived)
+	ResponseParsed    bool   `json:"response_parsed,omitempty"`    // true when response was successfully extracted from structured envelope
+	NormalTermination bool   `json:"normal_termination,omitempty"` // true when LLM completed normally
+	StopReason        string `json:"stop_reason,omitempty"`        // provider-reported stop reason (populated on success and abnormal termination)
+
+	// Resource accounting (mirrors ClawEh DispatchStatus where applicable)
+	InputTokens         int     `json:"input_tokens,omitempty"`
+	OutputTokens        int     `json:"output_tokens,omitempty"`
+	CacheReadTokens     int     `json:"cache_read_tokens,omitempty"`
+	CacheCreationTokens int     `json:"cache_creation_tokens,omitempty"`
+	CostUSD             float64 `json:"cost_usd,omitempty"`
+	DurationMs          int64   `json:"duration_ms,omitempty"`    // Wall-clock duration from exec start to exec exit
+	BytesSent           int64   `json:"bytes_sent,omitempty"`     // Bytes handed to the child process (prompt + args)
+	BytesReceived       int64   `json:"bytes_received,omitempty"` // Raw stdout byte count (alias of ResponseSize for clarity)
+	ProviderModel       string  `json:"provider_model,omitempty"` // Provider-returned model name (distinct from Maestro's config ID)
+	Success             bool    `json:"success"`                  // True iff ExitCode == 0 AND no provider-reported error
+}
+
+// ProviderReportedError reports whether the provider surfaced an error in its
+// output envelope, distinct from a non-zero exit code. Used by the runner to
+// route envelope-only failures (e.g. Codex turn.failed, Claude is_error, Gemini
+// blocked) into the retry path rather than the schema-validation path.
+func (r *DispatchResult) ProviderReportedError() bool {
+	if r == nil {
+		return false
+	}
+	if r.IsError {
+		return true
+	}
+	if !r.NormalTermination && r.StopReason != "" {
+		return true
+	}
+	return false
 }
 
 // NewService creates a new LLM service
@@ -336,6 +368,20 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 		}
 	}
 
+	// Compute bytes handed to the child process (prompt + args), used for
+	// BytesSent in DispatchResult. For stdin-mode LLMs this is len(promptText);
+	// for args-mode LLMs the prompt is embedded in args, so summing arg lengths
+	// captures the full payload (prompt + any flag-bearing arguments).
+	// Matches ClawEh's bytes_sent semantics for CLI providers.
+	var bytesSent int64
+	if llm.Stdin {
+		bytesSent = int64(len(promptText))
+	} else {
+		for _, a := range args {
+			bytesSent += int64(len(a))
+		}
+	}
+
 	s.logger.Debugf("Executing command: %s %v (stdin: %v)", llm.Command, args, llm.Stdin)
 
 	// Create context with timeout for deadline tracking.
@@ -379,6 +425,10 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 		cmd.Stdin = strings.NewReader(promptText)
 	}
 
+	// Wall-clock timing covers Start() through Wait(); we report this even if
+	// the parser also extracts a duration from the provider envelope.
+	execStart := time.Now()
+
 	// Start the process (non-blocking, unlike cmd.Run())
 	if startErr := cmd.Start(); startErr != nil {
 		return nil, fmt.Errorf("infrastructure failure: %w", startErr)
@@ -421,11 +471,17 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 	// Signal the watchdog goroutine that the process has exited so it can return.
 	close(processExited)
 
+	wallDurationMs := time.Since(execStart).Milliseconds()
+
 	// Get exit code
 	exitCode := 0
 	if cmd.ProcessState != nil {
 		exitCode = cmd.ProcessState.ExitCode()
 	}
+
+	// Capture raw stdout/stderr byte counts BEFORE any trimming/parsing; this is
+	// the wire-level byte count that BytesReceived must reflect.
+	rawStdoutLen := stdout.Len()
 
 	// Get output (always capture stdout and stderr)
 	output := strings.TrimSpace(stdout.String())
@@ -464,19 +520,36 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 		normalTermination = false
 	}
 
+	// Prefer the provider-reported duration when present, fall back to wall clock.
+	// We log both via the runner if they differ.
+	durationMs := parsed.DurationMs
+	if durationMs == 0 {
+		durationMs = wallDurationMs
+	}
+
 	// Build result - always include Stdout and Stderr
 	result := &DispatchResult{
-		ExitCode:          exitCode,
-		Stdout:            output,
-		Stderr:            stderrOutput,
-		Text:              parsed.Text,
-		IsError:           parsed.IsError,
-		TurnCount:         parsed.TurnCount,
-		ResponseSize:      responseSize,
-		ResponseParsed:    parsed.ResponseParsed,
-		NormalTermination: normalTermination,
-		StopReason:        parsed.StopReason,
+		ExitCode:            exitCode,
+		Stdout:              output,
+		Stderr:              stderrOutput,
+		Text:                parsed.Text,
+		IsError:             parsed.IsError,
+		NumTurns:            parsed.NumTurns,
+		ResponseSize:        responseSize,
+		ResponseParsed:      parsed.ResponseParsed,
+		NormalTermination:   normalTermination,
+		StopReason:          parsed.StopReason,
+		InputTokens:         parsed.InputTokens,
+		OutputTokens:        parsed.OutputTokens,
+		CacheReadTokens:     parsed.CacheReadTokens,
+		CacheCreationTokens: parsed.CacheCreationTokens,
+		CostUSD:             parsed.CostUSD,
+		DurationMs:          durationMs,
+		BytesSent:           bytesSent,
+		BytesReceived:       int64(rawStdoutLen),
+		ProviderModel:       parsed.ProviderModel,
 	}
+	result.Success = exitCode == 0 && !result.ProviderReportedError()
 
 	if exitCode != 0 {
 		s.logger.Warnf("LLM command exited with non-zero code %d", exitCode)
