@@ -125,6 +125,23 @@ type Message struct {
 	Stderr       string `json:"stderr"`              // Raw stderr from LLM
 	ResponseSize int    `json:"response_size"`       // Size of stdout
 
+	// Provider envelope summary (populated for response messages)
+	ProviderModel string `json:"provider_model,omitempty"` // Provider-returned model name
+	StopReason    string `json:"stop_reason,omitempty"`    // Provider stop reason (e.g. "end_turn", "turn.failed")
+	IsError       bool   `json:"is_error,omitempty"`       // LLM reported an error in its output envelope
+	Success       bool   `json:"success,omitempty"`        // True iff exit==0 AND no provider-reported error
+	NumTurns      int    `json:"num_turns,omitempty"`      // Number of provider turns
+
+	// Resource accounting (mirrors ClawEh DispatchStatus where applicable)
+	InputTokens         int     `json:"input_tokens,omitempty"`
+	OutputTokens        int     `json:"output_tokens,omitempty"`
+	CacheReadTokens     int     `json:"cache_read_tokens,omitempty"`
+	CacheCreationTokens int     `json:"cache_creation_tokens,omitempty"`
+	CostUSD             float64 `json:"cost_usd,omitempty"`
+	DurationMs          int64   `json:"duration_ms,omitempty"`
+	BytesSent           int64   `json:"bytes_sent,omitempty"`
+	BytesReceived       int64   `json:"bytes_received,omitempty"`
+
 	// Infrastructure error - present when command couldn't execute
 	Error string `json:"error,omitempty"` // Infrastructure error message
 
@@ -208,15 +225,15 @@ type WorkerResult struct {
 	TaskPrompt             string `json:"task_prompt,omitempty"`
 
 	// What was actually sent/received
-	FullPrompt        string `json:"full_prompt"`                      // Complete constructed prompt sent to LLM
-	Response          string `json:"response"`                         // Full LLM response
+	FullPrompt        string `json:"full_prompt"` // Complete constructed prompt sent to LLM
+	Response          string `json:"response"`    // Full LLM response
 	LLMModelID        string `json:"llm_model_id"`
 	Invocations       int    `json:"invocations"`
-	Status            string `json:"status"`                           // done/failed
-	Error             string `json:"error,omitempty"`                  // Human-readable error message
-	ErrorCode         string `json:"error_code,omitempty"`             // Machine-readable failure code (e.g. "no_llm_enabled")
-	NormalTermination bool   `json:"normal_termination,omitempty"`     // true when LLM completed normally
-	StopReason        string `json:"stop_reason,omitempty"`            // non-empty only on abnormal termination
+	Status            string `json:"status"`                       // done/failed
+	Error             string `json:"error,omitempty"`              // Human-readable error message
+	ErrorCode         string `json:"error_code,omitempty"`         // Machine-readable failure code (e.g. "no_llm_enabled")
+	NormalTermination bool   `json:"normal_termination,omitempty"` // true when LLM completed normally
+	StopReason        string `json:"stop_reason,omitempty"`        // non-empty only on abnormal termination
 }
 
 // QAResult contains the complete audit trail for QA execution
