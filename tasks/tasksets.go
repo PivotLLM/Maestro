@@ -842,6 +842,20 @@ func (s *Service) GetResultsDir(project string) string {
 // The flock library does not auto-clean its lock files; callers that own
 // the full lifecycle of a task set (e.g. dispatch) use this to avoid leaks.
 // Missing files are ignored.
+// MarkCallbackDelivered records the callback delivery time on the taskset.
+// Subsequent sendCallback calls check this field and skip re-delivery.
+func (s *Service) MarkCallbackDelivered(project, path string) error {
+	return s.withLock(project, path, func() error {
+		ts, err := s.loadTaskSet(project, path)
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		ts.CallbackedAt = &now
+		return s.saveTaskSet(project, path, ts)
+	})
+}
+
 func (s *Service) RemoveTaskSetLock(project, path string) error {
 	lockPath := s.getLockPath(project, path)
 	if err := os.Remove(lockPath); err != nil && !os.IsNotExist(err) {

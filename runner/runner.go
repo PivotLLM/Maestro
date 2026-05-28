@@ -933,9 +933,28 @@ func (r *Runner) executeRun(params *runExecutionParams) {
 		}
 	}
 
-	// Fire callbacks for any taskset with a non-empty CallbackURL
+	// Build the set of taskset paths that had at least one eligible task in this run.
+	// params.eligibleTasks holds only tasks that were waiting/retry at run-start, so
+	// cross-referencing here limits callbacks to tasksets actually touched by this run
+	// and prevents re-firing stale callbacks on historical tasksets (e.g. old dispatch/*)
+	// that happen to share the same path prefix.
+	eligibleUUIDs := make(map[string]bool, len(params.eligibleTasks))
+	for _, task := range params.eligibleTasks {
+		eligibleUUIDs[task.UUID] = true
+	}
+	executedTaskSetPaths := make(map[string]bool)
 	for _, ts := range params.taskSetList.TaskSets {
-		if ts.CallbackURL != "" {
+		for _, task := range ts.Tasks {
+			if eligibleUUIDs[task.UUID] {
+				executedTaskSetPaths[ts.Path] = true
+				break
+			}
+		}
+	}
+
+	// Fire callbacks only for tasksets that were part of this run
+	for _, ts := range params.taskSetList.TaskSets {
+		if ts.CallbackURL != "" && executedTaskSetPaths[ts.Path] {
 			r.sendCallback(params.req.Project, ts, "")
 		}
 	}
@@ -3341,6 +3360,12 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 		return
 	}
 
+	// Skip if callback already delivered (guards against re-fires from any code path)
+	if reloaded.CallbackedAt != nil {
+		r.logger.Warnf("Callback: skipping already-delivered callback for %s (delivered at %s)", ts.Path, reloaded.CallbackedAt.Format(time.RFC3339))
+		return
+	}
+
 	event := callbackEventCompleted
 	var topErrorCode, topErrorMessage string
 	tasks := make([]callbackTask, 0, len(reloaded.Tasks))
@@ -3397,6 +3422,9 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 		r.logger.Warnf("Callback: POST to %s returned status %d (event=%s)", ts.CallbackURL, resp.StatusCode, event)
 	} else {
 		r.logger.Infof("Callback: POST to %s returned status %d (event=%s)", ts.CallbackURL, resp.StatusCode, event)
+		if err := r.tasks.MarkCallbackDelivered(project, ts.Path); err != nil {
+			r.logger.Warnf("Callback: failed to mark callback delivered for %s: %v", ts.Path, err)
+		}
 	}
 }
 
