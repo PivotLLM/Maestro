@@ -2607,11 +2607,11 @@ if echo "$CB_DISPATCH" | grep -q '"status":"running"'; then
         echo "$CB_PAYLOAD" | grep -q "\"path\""      || CB_OK=false
         echo "$CB_PAYLOAD" | grep -q "\"uuid\""      || CB_OK=false
         echo "$CB_PAYLOAD" | grep -q "\"status\""    || CB_OK=false
-        echo "$CB_PAYLOAD" | grep -q "\"result_file\"" || CB_OK=false
+        echo "$CB_PAYLOAD" | grep -q "\"retrieval_instruction\"" || CB_OK=false
         echo "$CB_PAYLOAD" | grep -q "$TEST_PROJECT" || CB_OK=false
 
         if [ "$CB_OK" = "true" ]; then
-            echo "    ${GREEN}PASS${NC}: Callback received with correct payload (project, path, uuid, status, result_file)"
+            echo "    ${GREEN}PASS${NC}: Callback received with correct payload (project, path, uuid, status, retrieval_instruction)"
             PASS_COUNT=$((PASS_COUNT + 1))
         else
             echo "    ${RED}FAIL${NC}: Callback payload missing expected fields"
