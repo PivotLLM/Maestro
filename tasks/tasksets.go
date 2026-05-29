@@ -984,6 +984,11 @@ func (s *Service) ResetTaskSet(project, path, mode string, deleteResults bool) (
 
 		taskSet.UpdatedAt = now
 
+		// Clear callback delivery stamp so a re-run fires a fresh callback
+		if resetCount > 0 {
+			taskSet.CallbackedAt = nil
+		}
+
 		// Save the updated task set
 		return s.saveTaskSet(project, path, taskSet)
 	})
