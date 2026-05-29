@@ -1383,9 +1383,6 @@ func (s *Server) registerTools() error {
 			mcp.WithString("callback_url",
 				mcp.Description("URL to POST completion notification"),
 			),
-			mcp.WithString("description",
-				mcp.Description("Optional caller-supplied description echoed back in the callback payload"),
-			),
 		), s.handleTaskDispatch)
 
 	s.mcpServer.AddTool(

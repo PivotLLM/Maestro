@@ -698,7 +698,6 @@ func (s *Server) handleTaskDispatch(_ context.Context, req mcp.CallToolRequest) 
 	instructionsFile := mcp.ParseString(req, "instructions_file", "")
 	instructionsFileSource := mcp.ParseString(req, "instructions_file_source", "")
 	callbackURL := mcp.ParseString(req, "callback_url", "")
-	description := mcp.ParseString(req, "description", "")
 
 	s.logToolCall(global.ToolTaskDispatch, map[string]string{"project": project, "path": path})
 
@@ -721,7 +720,6 @@ func (s *Server) handleTaskDispatch(_ context.Context, req mcp.CallToolRequest) 
 		InstructionsFile:       instructionsFile,
 		InstructionsFileSource: instructionsFileSource,
 		CallbackURL:            callbackURL,
-		Description:            description,
 	}
 
 	result, err := s.runner.RunDispatch(dispatchReq)
