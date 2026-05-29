@@ -148,7 +148,8 @@ Use this phase when:
      taskset_reset(
        project="<project>",
        path="analysis",
-       delete_results=true  # Removes results files from disk (default: true)
+       mode="all",           # Required: "all" resets every task, "failed" resets only failed tasks
+       delete_results=true   # Removes results files from disk (default: true)
      )
      ```
 
