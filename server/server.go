@@ -1779,10 +1779,12 @@ func (s *Server) Run() error {
 
 // waitForRunner waits for any active runner tasks to complete before shutdown.
 // This ensures tasks complete and reports are written even if the calling process exits.
+// runner.Wait() uses activeRuns (a WaitGroup) which tracks both regular runs and
+// dispatches; calling it unconditionally is safe — it returns immediately when nothing
+// is in flight. The old IsRunning() guard only checked runningProjects, which dispatch
+// tasks never register in, causing Maestro to exit before dispatch callbacks fired.
 func (s *Server) waitForRunner() {
-	if s.runner.IsRunning() {
-		s.logger.Info("Waiting for runner to complete active tasks...")
-		s.runner.Wait()
-		s.logger.Info("Runner completed all tasks")
-	}
+	s.logger.Info("Waiting for runner to complete active tasks...")
+	s.runner.Wait()
+	s.logger.Info("Runner completed all tasks")
 }
