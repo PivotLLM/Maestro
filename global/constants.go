@@ -116,6 +116,7 @@ const (
 
 	// MCP Tool Names - File Operations (Cross-Domain)
 	ToolFileCopy   = "file_copy"
+	ToolFileDelete = "file_delete"
 	ToolFileImport = "file_import"
 
 	// MCP Tool Names - Reports (read-only domain with controlled write)
