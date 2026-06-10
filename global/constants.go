@@ -116,6 +116,7 @@ const (
 
 	// MCP Tool Names - File Operations (Cross-Domain)
 	ToolFileCopy   = "file_copy"
+	ToolFileDelete = "file_delete"
 	ToolFileImport = "file_import"
 
 	// MCP Tool Names - Reports (read-only domain with controlled write)
@@ -183,7 +184,7 @@ const (
 	DefaultContextSizeLimit = 256 * 1024 // 256 KB
 	DefaultTimeout          = 1800       // seconds
 	MinTimeout              = 60         // seconds
-	MaxTimeout              = 1800       // seconds
+	MaxTimeout              = 7200       // seconds
 
 	// Limits: Infrastructure Retries (network failures, command timeouts - no LLM cost)
 	DefaultMaxRetries = 3  // Default retries for infrastructure failures

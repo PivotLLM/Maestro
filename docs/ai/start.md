@@ -241,7 +241,9 @@ This separation ensures infrastructure issues (network, permissions) don't consu
 
 ### Using the Runner
 
-When you have many similar tasks that can run independently:
+For a **single one-off task**, use `task_dispatch` — it creates a one-task taskset and runs it immediately without requiring separate `taskset_create` / `task_create` / `task_run` calls. See [Single-Task Dispatch](#single-task-dispatch) below.
+
+When you have **many similar tasks** that can run independently:
 
 1. Create a task set: `taskset_create(project="...", path="analysis", title="...", parallel=true)`
 2. Create tasks (manually or from lists)
@@ -290,11 +292,12 @@ task_report(project="my-project", format="markdown")
 
 **Resetting Tasks for Re-execution**:
 ```
-# Reset all tasks in a task set to waiting status
+# Reset all tasks to waiting status
 taskset_reset(
   project="my-project",
   path="analysis",
-  delete_results=true  # Removes results files from disk (default)
+  mode="all",           # Required: "all" resets every task, "failed" resets only failed tasks
+  delete_results=true   # Removes results files from disk (default)
 )
 ```
 
@@ -332,6 +335,55 @@ QA results include:
 **Note**: Maximum QA iterations are controlled at the task set level via `limits.max_qa`, not per-task.
 
 **Best practice**: Use a different LLM for QA verification to reduce correlated errors.
+
+### Single-Task Dispatch
+
+`task_dispatch` is a shorthand for the common pattern of creating a taskset, adding one task, and running it — all in a single call. Use it for fire-and-forget investigation, delegation, or any work that is self-contained in a single LLM invocation.
+
+```
+task_dispatch(
+  project="my-project",
+  path="dispatch/investigate-auth",   # Optional; auto-generated as dispatch/<uuid8> if omitted
+  title="Investigate auth failure",
+  llm_model_id="claude",
+  instructions_file="my-playbook/instructions/worker.md",  # Or use prompt= / instructions_text=
+  instructions_file_source="playbook",
+  prompt="Investigate why login fails for SSO users.",
+  callback_url="https://my-endpoint/cb"  # Optional; POST fired on completion
+)
+```
+
+**Returns immediately** with:
+- `uuid` — task identifier
+- `path` — taskset path (use this to retrieve the result)
+- `retrieval_instruction` — exact tool call to fetch the result when ready
+
+**When the task completes**, Maestro POSTs to `callback_url` (if set):
+```json
+{
+  "event": "completed",
+  "project": "my-project",
+  "path": "dispatch/investigate-auth",
+  "completed_at": "...",
+  "tasks": [{
+    "uuid": "...",
+    "title": "Investigate auth failure",
+    "status": "done",
+    "retrieval_instruction": "call task_result_get with project=\"my-project\" and uuid=\"...\""
+  }]
+}
+```
+
+`event` is `"completed"` if the task finished successfully, `"failed"` if it errored. The top-level `error_code` and `error_message` fields are populated on failure.
+
+**Retrieve the result** after completion:
+```
+task_result_get(project="my-project", uuid="<uuid from dispatch response>")
+```
+
+**When to use `task_dispatch` vs `task_run`**:
+- Use `task_dispatch` for a single, self-contained task — especially with a callback so the result is pushed to you.
+- Use `task_run` for multi-task tasksets, batch processing, QA workflows, or anything using schemas and report templates.
 
 ---
 

@@ -153,6 +153,49 @@ type ImportAndConvertResult struct {
 	ConvertFailed  *int `json:"convert_failed,omitempty"`
 }
 
+// handleFileDelete deletes a file from a project or playbook domain.
+func (s *Server) handleFileDelete(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	path := mcp.ParseString(request, "path", "")
+	source := mcp.ParseString(request, "source", "project")
+	project := mcp.ParseString(request, "project", "")
+	playbook := mcp.ParseString(request, "playbook", "")
+
+	s.logToolCall(global.ToolFileDelete, map[string]string{"path": path, "source": source})
+
+	if path == "" {
+		return mcp.NewToolResultError("path is required"), nil
+	}
+
+	result := map[string]interface{}{
+		"path":    path,
+		"source":  source,
+		"deleted": true,
+	}
+
+	switch source {
+	case "project", "":
+		if project == "" {
+			return mcp.NewToolResultError("project is required when source is 'project'"), nil
+		}
+		if err := s.projects.DeleteFile(project, path); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		result["project"] = project
+	case "playbook":
+		if playbook == "" {
+			return mcp.NewToolResultError("playbook is required when source is 'playbook'"), nil
+		}
+		if err := s.playbooks.DeleteFile(playbook, path); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		result["playbook"] = playbook
+	default:
+		return mcp.NewToolResultError("source must be 'project' or 'playbook' (reference is read-only)"), nil
+	}
+
+	return createJSONResult(result)
+}
+
 // handleFileImport handles importing external files into a project
 func (s *Server) handleFileImport(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	source := mcp.ParseString(request, "source", "")

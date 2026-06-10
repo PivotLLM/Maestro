@@ -933,10 +933,29 @@ func (r *Runner) executeRun(params *runExecutionParams) {
 		}
 	}
 
-	// Fire callbacks for any taskset with a non-empty CallbackURL
+	// Build the set of taskset paths that had at least one eligible task in this run.
+	// params.eligibleTasks holds only tasks that were waiting/retry at run-start, so
+	// cross-referencing here limits callbacks to tasksets actually touched by this run
+	// and prevents re-firing stale callbacks on historical tasksets (e.g. old dispatch/*)
+	// that happen to share the same path prefix.
+	eligibleUUIDs := make(map[string]bool, len(params.eligibleTasks))
+	for _, task := range params.eligibleTasks {
+		eligibleUUIDs[task.UUID] = true
+	}
+	executedTaskSetPaths := make(map[string]bool)
 	for _, ts := range params.taskSetList.TaskSets {
-		if ts.CallbackURL != "" {
-			r.sendCallback(params.req.Project, ts, "")
+		for _, task := range ts.Tasks {
+			if eligibleUUIDs[task.UUID] {
+				executedTaskSetPaths[ts.Path] = true
+				break
+			}
+		}
+	}
+
+	// Fire callbacks only for tasksets that were part of this run
+	for _, ts := range params.taskSetList.TaskSets {
+		if ts.CallbackURL != "" && executedTaskSetPaths[ts.Path] {
+			r.sendCallback(params.req.Project, ts)
 		}
 	}
 }
@@ -3320,7 +3339,6 @@ type callbackPayload struct {
 	Event        string         `json:"event"` // "completed" or "failed"
 	Project      string         `json:"project"`
 	Path         string         `json:"path"`
-	Description  string         `json:"description,omitempty"`
 	CompletedAt  time.Time      `json:"completed_at"`
 	ErrorCode    string         `json:"error_code,omitempty"`    // Machine-readable failure code (event=failed only)
 	ErrorMessage string         `json:"error_message,omitempty"` // Human-readable failure message (event=failed only)
@@ -3328,16 +3346,21 @@ type callbackPayload struct {
 }
 
 // sendCallback fires a POST callback to the taskset's CallbackURL with final task statuses.
-// description is the caller-supplied dispatch description (empty for non-dispatch runs).
 // The event field and top-level error info are derived from the reloaded task statuses:
 // "completed" if every task is done, otherwise "failed" with the first non-done task's
 // error_code/error_message surfaced at the payload root.
 // Errors are logged but do not affect execution (fire and forget).
-func (r *Runner) sendCallback(project string, ts *global.TaskSet, description string) {
+func (r *Runner) sendCallback(project string, ts *global.TaskSet) {
 	// Reload the taskset from disk to get final per-task statuses
 	reloaded, err := r.tasks.GetTaskSet(project, ts.Path)
 	if err != nil {
 		r.logger.Errorf("Callback: failed to reload taskset %s for project %s: %v", ts.Path, project, err)
+		return
+	}
+
+	// Skip if callback already delivered (guards against re-fires from any code path)
+	if reloaded.CallbackedAt != nil {
+		r.logger.Warnf("Callback: skipping already-delivered callback for %s (delivered at %s)", ts.Path, reloaded.CallbackedAt.Format(time.RFC3339))
 		return
 	}
 
@@ -3372,7 +3395,6 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 		Event:        event,
 		Project:      project,
 		Path:         reloaded.Path,
-		Description:  description,
 		CompletedAt:  time.Now(),
 		ErrorCode:    topErrorCode,
 		ErrorMessage: topErrorMessage,
@@ -3397,6 +3419,9 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet, description st
 		r.logger.Warnf("Callback: POST to %s returned status %d (event=%s)", ts.CallbackURL, resp.StatusCode, event)
 	} else {
 		r.logger.Infof("Callback: POST to %s returned status %d (event=%s)", ts.CallbackURL, resp.StatusCode, event)
+		if err := r.tasks.MarkCallbackDelivered(project, ts.Path); err != nil {
+			r.logger.Warnf("Callback: failed to mark callback delivered for %s: %v", ts.Path, err)
+		}
 	}
 }
 
@@ -3411,7 +3436,6 @@ type DispatchRequest struct {
 	InstructionsFile       string
 	InstructionsFileSource string
 	CallbackURL            string
-	Description            string // caller-supplied description echoed in callback payload
 }
 
 // DispatchResult is returned immediately from RunDispatch
@@ -3510,7 +3534,7 @@ func (r *Runner) runDispatchExecution(req *DispatchRequest, task *global.Task, p
 	if err != nil {
 		r.logger.Errorf("Dispatch: failed to load task %s: %v", task.UUID, err)
 		r.failTaskPreExecution(req.Project, task, "task_load_failed", err.Error(), nil)
-		r.dispatchCallback(req.Project, path, req.Description, req.CallbackURL)
+		r.dispatchCallback(req.Project, path, req.CallbackURL)
 		return
 	}
 
@@ -3534,12 +3558,12 @@ func (r *Runner) runDispatchExecution(req *DispatchRequest, task *global.Task, p
 		}
 	}
 
-	r.dispatchCallback(req.Project, path, req.Description, req.CallbackURL)
+	r.dispatchCallback(req.Project, path, req.CallbackURL)
 }
 
 // dispatchCallback loads the taskset and fires the callback if a URL is configured.
 // Any errors are logged; this is fire-and-forget.
-func (r *Runner) dispatchCallback(project, path, description, callbackURL string) {
+func (r *Runner) dispatchCallback(project, path, callbackURL string) {
 	if callbackURL == "" {
 		return
 	}
@@ -3548,5 +3572,5 @@ func (r *Runner) dispatchCallback(project, path, description, callbackURL string
 		r.logger.Errorf("Dispatch: failed to load taskset for callback: %v", err)
 		return
 	}
-	r.sendCallback(project, ts, description)
+	r.sendCallback(project, ts)
 }
