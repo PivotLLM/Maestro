@@ -3,10 +3,11 @@
  * Please see the LICENSE file for details                                    *
  ******************************************************************************/
 
-package server
+package maestro
 
 import (
-	"context"
+	"github.com/PivotLLM/toolspec"
+
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,71 +15,69 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
-
 	"github.com/PivotLLM/Maestro/global"
 )
 
 // handleSupervisorUpdate handles the supervisor_update MCP tool.
 // Allows a supervisor to replace the worker response with their own content.
 // The response must pass template validation. History is append-only.
-func (s *Server) handleSupervisorUpdate(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := mcp.ParseString(request, "project", "")
-	uuid := mcp.ParseString(request, "uuid", "")
-	response := mcp.ParseString(request, "response", "")
+func (p *Provider) handleSupervisorUpdate(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	project := parseString(call.Args, "project", "")
+	uuid := parseString(call.Args, "uuid", "")
+	response := parseString(call.Args, "response", "")
 
-	s.logToolCall(global.ToolSupervisorUpdate, map[string]string{"project": project, "uuid": uuid})
+	p.logToolCall(global.ToolSupervisorUpdate, map[string]string{"project": project, "uuid": uuid})
 
 	if project == "" {
-		return mcp.NewToolResultError("project parameter is required"), nil
+		return nil, fmt.Errorf("%s", "project parameter is required")
 	}
 	if uuid == "" {
-		return mcp.NewToolResultError("uuid parameter is required"), nil
+		return nil, fmt.Errorf("%s", "uuid parameter is required")
 	}
 	if response == "" {
-		return mcp.NewToolResultError("response parameter is required"), nil
+		return nil, fmt.Errorf("%s", "response parameter is required")
 	}
 
 	// Get task to find the taskset for template validation
-	task, taskPath, err := s.tasks.GetTask(project, uuid)
+	task, taskPath, err := p.tasks.GetTask(project, uuid)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get task: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get task: %v", err)), IsError: true}, nil
 	}
 
 	// Get taskset for template
-	taskset, err := s.tasks.GetTaskSet(project, taskPath)
+	taskset, err := p.tasks.GetTaskSet(project, taskPath)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get taskset: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get taskset: %v", err)), IsError: true}, nil
 	}
 
 	// Validate response against worker_response_template
 	if taskset.WorkerResponseTemplate != "" {
 		// Load template
-		templateContent, err := s.loadTemplate(project, taskset.WorkerResponseTemplate)
+		templateContent, err := p.loadTemplate(project, taskset.WorkerResponseTemplate)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to load response template: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to load response template: %v", err)), IsError: true}, nil
 		}
 
 		// Parse template as JSON schema
 		var schema map[string]interface{}
 		if err := json.Unmarshal([]byte(templateContent), &schema); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to parse response template: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to parse response template: %v", err)), IsError: true}, nil
 		}
 
 		// Parse response as JSON
 		var responseData map[string]interface{}
 		if err := json.Unmarshal([]byte(response), &responseData); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("response must be valid JSON matching template. Template:\n%s\n\nYour response is not valid JSON: %v", templateContent, err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("response must be valid JSON matching template. Template:\n%s\n\nYour response is not valid JSON: %v", templateContent, err)), IsError: true}, nil
 		}
 
 		// Basic validation: check required fields exist
 		if err := validateResponseAgainstSchema(responseData, schema); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("response does not match template. Template:\n%s\n\nValidation error: %v", templateContent, err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("response does not match template. Template:\n%s\n\nValidation error: %v", templateContent, err)), IsError: true}, nil
 		}
 	}
 
 	// Load existing result
-	resultsDir := s.tasks.GetResultsDir(project)
+	resultsDir := p.tasks.GetResultsDir(project)
 	resultPath := filepath.Join(resultsDir, uuid+".json")
 
 	var taskResult global.TaskResult
@@ -103,11 +102,11 @@ func (s *Server) handleSupervisorUpdate(_ context.Context, request mcp.CallToolR
 				History: []global.Message{},
 			}
 		} else {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to read result file: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read result file: %v", err)), IsError: true}, nil
 		}
 	} else {
 		if err := json.Unmarshal(resultData, &taskResult); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to parse result file: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to parse result file: %v", err)), IsError: true}, nil
 		}
 	}
 
@@ -140,11 +139,11 @@ func (s *Server) handleSupervisorUpdate(_ context.Context, request mcp.CallToolR
 	// Save result file
 	newResultData, err := json.MarshalIndent(taskResult, "", "  ")
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal result: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to marshal result: %v", err)), IsError: true}, nil
 	}
 
 	if err := os.WriteFile(resultPath, newResultData, 0644); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save result: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to save result: %v", err)), IsError: true}, nil
 	}
 
 	// Update task status to done and clear QA verdict
@@ -157,8 +156,8 @@ func (s *Server) handleSupervisorUpdate(_ context.Context, request mcp.CallToolR
 			"status":  "superseded",
 		},
 	}
-	if _, err := s.tasks.UpdateTask(project, uuid, updates); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to update task status: %v", err)), nil
+	if _, err := p.tasks.UpdateTask(project, uuid, updates); err != nil {
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to update task status: %v", err)), IsError: true}, nil
 	}
 
 	result := map[string]interface{}{
@@ -174,20 +173,20 @@ func (s *Server) handleSupervisorUpdate(_ context.Context, request mcp.CallToolR
 }
 
 // loadTemplate loads a template file from playbook or project files
-func (s *Server) loadTemplate(project, templatePath string) (string, error) {
+func (p *Provider) loadTemplate(project, templatePath string) (string, error) {
 	// Try playbook first (format: playbook-name/path/to/file)
 	parts := strings.SplitN(templatePath, "/", 2)
 	if len(parts) >= 2 {
 		playbookName := parts[0]
 		filePath := parts[1]
-		fullPath := filepath.Join(s.config.PlaybooksDir(), playbookName, filePath)
+		fullPath := filepath.Join(p.config.PlaybooksDir(), playbookName, filePath)
 		if content, err := os.ReadFile(fullPath); err == nil {
 			return string(content), nil
 		}
 	}
 
 	// Try project files
-	proj, err := s.projects.Get(project)
+	proj, err := p.projects.Get(project)
 	if err != nil {
 		return "", fmt.Errorf("failed to get project: %w", err)
 	}
@@ -232,32 +231,32 @@ func validateResponseAgainstSchema(response, schema map[string]interface{}) erro
 
 // handleReportCreate handles the report_create MCP tool.
 // Generates reports from task results using the same logic as the runner.
-func (s *Server) handleReportCreate(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := mcp.ParseString(request, "project", "")
-	path := mcp.ParseString(request, "path", "")
+func (p *Provider) handleReportCreate(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	project := parseString(call.Args, "project", "")
+	path := parseString(call.Args, "path", "")
 
-	s.logToolCall(global.ToolReportCreate, map[string]string{"project": project, "path": path})
+	p.logToolCall(global.ToolReportCreate, map[string]string{"project": project, "path": path})
 
 	if project == "" {
-		return mcp.NewToolResultError("project parameter is required"), nil
+		return nil, fmt.Errorf("%s", "project parameter is required")
 	}
 
 	// Get project to retrieve its title for the report session
-	proj, err := s.projects.Get(project)
+	proj, err := p.projects.Get(project)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get project: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get project: %v", err)), IsError: true}, nil
 	}
 
 	// Start a new report session with a fresh prefix
-	_, err = s.projects.StartReport(project, proj.Title, "")
+	_, err = p.projects.StartReport(project, proj.Title, "")
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to start report session: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to start report session: %v", err)), IsError: true}, nil
 	}
 
 	// Use runner's GenerateReport function
-	reports, err := s.runner.GenerateReport(project, path)
+	reports, err := p.runner.GenerateReport(project, path)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to generate report: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to generate report: %v", err)), IsError: true}, nil
 	}
 
 	result := map[string]interface{}{

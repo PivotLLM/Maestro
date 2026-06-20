@@ -17,6 +17,6 @@ bin/
 build/
 *.swp
 Maestro
-maestro
+/maestro
 maestro-test
 .config-test-runtime.json

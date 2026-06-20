@@ -3,34 +3,34 @@
  * Please see the LICENSE file for details                                    *
  ******************************************************************************/
 
-package server
+package maestro
 
 import (
-	"context"
+	"github.com/PivotLLM/toolspec"
+
 	"fmt"
 	"path/filepath"
 
 	"github.com/PivotLLM/Maestro/global"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/tenebris-tech/x2md/convert"
 )
 
 // handleFileCopy handles copying files within and between domains
-func (s *Server) handleFileCopy(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (p *Provider) handleFileCopy(call *toolspec.ToolCall) (*toolspec.Result, error) {
 	// Parse source parameters
-	fromSource := mcp.ParseString(request, "from_source", "project")
-	fromPlaybook := mcp.ParseString(request, "from_playbook", "")
-	fromProject := mcp.ParseString(request, "from_project", "")
-	fromPath := mcp.ParseString(request, "from_path", "")
+	fromSource := parseString(call.Args, "from_source", "project")
+	fromPlaybook := parseString(call.Args, "from_playbook", "")
+	fromProject := parseString(call.Args, "from_project", "")
+	fromPath := parseString(call.Args, "from_path", "")
 
 	// Parse destination parameters
-	toSource := mcp.ParseString(request, "to_source", "project")
-	toPlaybook := mcp.ParseString(request, "to_playbook", "")
-	toProject := mcp.ParseString(request, "to_project", "")
-	toPath := mcp.ParseString(request, "to_path", "")
-	summary := mcp.ParseString(request, "summary", "")
+	toSource := parseString(call.Args, "to_source", "project")
+	toPlaybook := parseString(call.Args, "to_playbook", "")
+	toProject := parseString(call.Args, "to_project", "")
+	toPath := parseString(call.Args, "to_path", "")
+	summary := parseString(call.Args, "summary", "")
 
-	s.logToolCall(global.ToolFileCopy, map[string]string{
+	p.logToolCall(global.ToolFileCopy, map[string]string{
 		"from_source": fromSource,
 		"from_path":   fromPath,
 		"to_source":   toSource,
@@ -39,20 +39,20 @@ func (s *Server) handleFileCopy(_ context.Context, request mcp.CallToolRequest) 
 
 	// Validate parameters
 	if fromPath == "" {
-		return mcp.NewToolResultError("from_path parameter is required"), nil
+		return nil, fmt.Errorf("%s", "from_path parameter is required")
 	}
 	if toPath == "" {
-		return mcp.NewToolResultError("to_path parameter is required"), nil
+		return nil, fmt.Errorf("%s", "to_path parameter is required")
 	}
 
 	// Validate source
 	if fromSource != "reference" && fromSource != "playbook" && fromSource != "project" {
-		return mcp.NewToolResultError("from_source must be 'reference', 'playbook', or 'project'"), nil
+		return nil, fmt.Errorf("%s", "from_source must be 'reference', 'playbook', or 'project'")
 	}
 
 	// Validate destination (reference is read-only)
 	if toSource != "playbook" && toSource != "project" {
-		return mcp.NewToolResultError("to_source must be 'playbook' or 'project' (reference is read-only)"), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint("to_source must be 'playbook' or 'project' (reference is read-only)"), IsError: true}, nil
 	}
 
 	// Read source file (entire file, no byte range)
@@ -61,29 +61,29 @@ func (s *Server) handleFileCopy(_ context.Context, request mcp.CallToolRequest) 
 
 	switch fromSource {
 	case "reference":
-		item, err := s.reference.Get(fromPath, 0, 0)
+		item, err := p.reference.Get(fromPath, 0, 0)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to read source file: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read source file: %v", err)), IsError: true}, nil
 		}
 		content = item.Content
 
 	case "playbook":
 		if fromPlaybook == "" {
-			return mcp.NewToolResultError("from_playbook parameter is required when from_source is 'playbook'"), nil
+			return nil, fmt.Errorf("%s", "from_playbook parameter is required when from_source is 'playbook'")
 		}
-		item, err := s.playbooks.GetFile(fromPlaybook, fromPath, 0, 0)
+		item, err := p.playbooks.GetFile(fromPlaybook, fromPath, 0, 0)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to read source file: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read source file: %v", err)), IsError: true}, nil
 		}
 		content = item.Content
 
 	case "project":
 		if fromProject == "" {
-			return mcp.NewToolResultError("from_project parameter is required when from_source is 'project'"), nil
+			return nil, fmt.Errorf("%s", "from_project parameter is required when from_source is 'project'")
 		}
-		item, err := s.projects.GetFile(fromProject, fromPath, 0, 0)
+		item, err := p.projects.GetFile(fromProject, fromPath, 0, 0)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to read source file: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read source file: %v", err)), IsError: true}, nil
 		}
 		content = item.Content
 	}
@@ -94,20 +94,20 @@ func (s *Server) handleFileCopy(_ context.Context, request mcp.CallToolRequest) 
 	switch toSource {
 	case "playbook":
 		if toPlaybook == "" {
-			return mcp.NewToolResultError("to_playbook parameter is required when to_source is 'playbook'"), nil
+			return nil, fmt.Errorf("%s", "to_playbook parameter is required when to_source is 'playbook'")
 		}
-		created, err = s.playbooks.PutFile(toPlaybook, toPath, content, summary)
+		created, err = p.playbooks.PutFile(toPlaybook, toPath, content, summary)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to write destination file: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to write destination file: %v", err)), IsError: true}, nil
 		}
 
 	case "project":
 		if toProject == "" {
-			return mcp.NewToolResultError("to_project parameter is required when to_source is 'project'"), nil
+			return nil, fmt.Errorf("%s", "to_project parameter is required when to_source is 'project'")
 		}
-		created, err = s.projects.PutFile(toProject, toPath, content, summary)
+		created, err = p.projects.PutFile(toProject, toPath, content, summary)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to write destination file: %v", err)), nil
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to write destination file: %v", err)), IsError: true}, nil
 		}
 	}
 
@@ -154,16 +154,16 @@ type ImportAndConvertResult struct {
 }
 
 // handleFileDelete deletes a file from a project or playbook domain.
-func (s *Server) handleFileDelete(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	path := mcp.ParseString(request, "path", "")
-	source := mcp.ParseString(request, "source", "project")
-	project := mcp.ParseString(request, "project", "")
-	playbook := mcp.ParseString(request, "playbook", "")
+func (p *Provider) handleFileDelete(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	path := parseString(call.Args, "path", "")
+	source := parseString(call.Args, "source", "project")
+	project := parseString(call.Args, "project", "")
+	playbook := parseString(call.Args, "playbook", "")
 
-	s.logToolCall(global.ToolFileDelete, map[string]string{"path": path, "source": source})
+	p.logToolCall(global.ToolFileDelete, map[string]string{"path": path, "source": source})
 
 	if path == "" {
-		return mcp.NewToolResultError("path is required"), nil
+		return nil, fmt.Errorf("%s", "path is required")
 	}
 
 	result := map[string]interface{}{
@@ -175,35 +175,35 @@ func (s *Server) handleFileDelete(_ context.Context, request mcp.CallToolRequest
 	switch source {
 	case "project", "":
 		if project == "" {
-			return mcp.NewToolResultError("project is required when source is 'project'"), nil
+			return nil, fmt.Errorf("%s", "project is required when source is 'project'")
 		}
-		if err := s.projects.DeleteFile(project, path); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+		if err := p.projects.DeleteFile(project, path); err != nil {
+			return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
 		}
 		result["project"] = project
 	case "playbook":
 		if playbook == "" {
-			return mcp.NewToolResultError("playbook is required when source is 'playbook'"), nil
+			return nil, fmt.Errorf("%s", "playbook is required when source is 'playbook'")
 		}
-		if err := s.playbooks.DeleteFile(playbook, path); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+		if err := p.playbooks.DeleteFile(playbook, path); err != nil {
+			return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
 		}
 		result["playbook"] = playbook
 	default:
-		return mcp.NewToolResultError("source must be 'project' or 'playbook' (reference is read-only)"), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint("source must be 'project' or 'playbook' (reference is read-only)"), IsError: true}, nil
 	}
 
 	return createJSONResult(result)
 }
 
 // handleFileImport handles importing external files into a project
-func (s *Server) handleFileImport(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	source := mcp.ParseString(request, "source", "")
-	project := mcp.ParseString(request, "project", "")
-	recursive := mcp.ParseBoolean(request, "recursive", false)
-	doConvert := mcp.ParseBoolean(request, "convert", false)
+func (p *Provider) handleFileImport(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	source := parseString(call.Args, "source", "")
+	project := parseString(call.Args, "project", "")
+	recursive := parseBool(call.Args, "recursive", false)
+	doConvert := parseBool(call.Args, "convert", false)
 
-	s.logToolCall(global.ToolFileImport, map[string]string{
+	p.logToolCall(global.ToolFileImport, map[string]string{
 		"source":    source,
 		"project":   project,
 		"recursive": fmt.Sprintf("%t", recursive),
@@ -211,15 +211,15 @@ func (s *Server) handleFileImport(_ context.Context, request mcp.CallToolRequest
 	})
 
 	if source == "" {
-		return mcp.NewToolResultError("source parameter is required"), nil
+		return nil, fmt.Errorf("%s", "source parameter is required")
 	}
 	if project == "" {
-		return mcp.NewToolResultError("project parameter is required"), nil
+		return nil, fmt.Errorf("%s", "project parameter is required")
 	}
 
-	importResult, err := s.projects.ImportFiles(project, source, recursive)
+	importResult, err := p.projects.ImportFiles(project, source, recursive)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
 	}
 
 	// Build result
@@ -234,7 +234,7 @@ func (s *Server) handleFileImport(_ context.Context, request mcp.CallToolRequest
 
 	// Run conversion if requested
 	if doConvert && importResult.FilesImported > 0 {
-		filesDir := s.projects.GetFilesDir(project)
+		filesDir := p.projects.GetFilesDir(project)
 		if filesDir != "" {
 			importedPath := filepath.Join(filesDir, importResult.ImportedTo)
 
@@ -246,7 +246,7 @@ func (s *Server) handleFileImport(_ context.Context, request mcp.CallToolRequest
 			convertResult, convertErr := converter.Convert(importedPath)
 			if convertErr != nil {
 				// Log but don't fail - import succeeded
-				s.logger.Warnf("Conversion after import failed: %v", convertErr)
+				p.logger.Warnf("Conversion after import failed: %v", convertErr)
 			} else {
 				converted := convertResult.Converted
 				skipped := convertResult.Skipped
