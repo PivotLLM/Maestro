@@ -146,6 +146,10 @@ func (s *Server) registerTools() error {
 	provider := &maestro.Provider{}
 	deps := toolspec.Deps{
 		Cfg: s.config,
+		Host: maestro.HostDeps{
+			Logger: s.logger,
+			Runner: s.runner,
+		},
 	}
 	tools := provider.RegisterTools(deps)
 

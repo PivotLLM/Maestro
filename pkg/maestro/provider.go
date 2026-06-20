@@ -19,6 +19,12 @@ import (
 	"github.com/PivotLLM/toolspec"
 )
 
+// HostDeps encapsulates the host-provided services
+type HostDeps struct {
+	Logger *logging.Logger
+	Runner *runner.Runner
+}
+
 // Provider implements toolspec.ToolProvider for Maestro.
 type Provider struct {
 	config             *config.Config
@@ -44,8 +50,23 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 	}
 	p.config = cfg
 
-	// Initialize logger (we can use a discard logger or default if not in deps)
-	p.logger, _ = logging.New("") // Or handle it properly
+	// Initialize logger and runner from Host if provided
+	var rInst *runner.Runner
+	if hd, ok := deps.Host.(HostDeps); ok {
+		if hd.Logger != nil {
+			p.logger = hd.Logger
+		} else {
+			p.logger, _ = logging.New("")
+		}
+		if hd.Runner != nil {
+			rInst = hd.Runner
+		}
+	} else if l, ok := deps.Host.(*logging.Logger); ok && l != nil {
+		// Fallback for previous implementation
+		p.logger = l
+	} else {
+		p.logger, _ = logging.New("")
+	}
 
 	// Recreate the initialization from server.go
 	var externalDirs []reference.ExternalDir
@@ -71,7 +92,12 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 		lists.WithLogger(p.logger),
 	)
 	p.llm = llm.NewService(cfg, p.logger, nil)
-	p.runner = runner.New(cfg, p.logger, nil, p.playbooks, p.reference, p.llm, p.tasks, p.projects)
+	
+	if rInst != nil {
+		p.runner = rInst
+	} else {
+		p.runner = runner.New(cfg, p.logger, nil, p.playbooks, p.reference, p.llm, p.tasks, p.projects)
+	}
 	p.markNonDestructive = cfg.MarkNonDestructive()
 
 	return p.getToolDefinitions()

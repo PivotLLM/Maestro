@@ -967,5 +967,26 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 			Handler: p.handleTaskReport,
 			Hints:   &toolspec.ToolHints{ReadOnly: toolspec.Allow(true)},
 		},
+		{
+			Name:        global.ToolSupervisorUpdate,
+			Description: "Allows a supervisor to replace the worker response with their own content. The response must pass template validation. History is append-only.",
+			Parameters:  []toolspec.Parameter{
+				{Name: "project", Type: "string", Description: "Project name", Required: true},
+				{Name: "uuid", Type: "string", Description: "Task UUID", Required: true},
+				{Name: "response", Type: "string", Description: "Supervisor's replacement response (must match worker_response_template if defined)", Required: true},
+			},
+			Handler: p.handleSupervisorUpdate,
+			Hints:   nil,
+		},
+		{
+			Name:        global.ToolReportCreate,
+			Description: "Generate reports from task results. Uses the same report generation logic as the runner. Supports optional path filtering.",
+			Parameters:  []toolspec.Parameter{
+				{Name: "project", Type: "string", Description: "Project name", Required: true},
+				{Name: "path", Type: "string", Description: "Task set path prefix to filter (optional)", Required: false},
+			},
+			Handler: p.handleReportCreate,
+			Hints:   nil,
+		},
 	}
 }
