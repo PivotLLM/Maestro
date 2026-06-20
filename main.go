@@ -6,7 +6,6 @@
 package main
 
 import (
-	"embed"
 	"flag"
 	"fmt"
 	"os"
@@ -14,13 +13,9 @@ import (
 	"github.com/PivotLLM/Maestro/config"
 	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/logging"
+	"github.com/PivotLLM/Maestro/pkg/maestro"
 	"github.com/PivotLLM/Maestro/server"
 )
-
-// EmbeddedReference contains all files from the docs/ai directory
-//
-//go:embed docs/ai/* docs/ai/phases/* docs/ai/templates/*
-var EmbeddedReference embed.FS
 
 func main() {
 	// Top-level panic recovery
@@ -52,7 +47,7 @@ func main() {
 	}
 
 	// Normal MCP server mode - pass embedded FS and optional config path
-	opts := []config.Option{config.WithEmbeddedFS(EmbeddedReference)}
+	opts := []config.Option{config.WithEmbeddedFS(maestro.EmbeddedReference)}
 	if *configPath != "" {
 		opts = append(opts, config.WithConfigPath(*configPath))
 	}

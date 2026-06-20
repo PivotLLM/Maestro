@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Worker Response Schema",
+  "description": "Default schema for validating worker task responses",
+  "type": "object",
+  "required": ["item_id", "status", "summary", "rationale"],
+  "properties": {
+    "item_id": {
+      "type": "string",
+      "description": "Identifier for the item being evaluated (from task context)"
+    },
+    "requirement": {
+      "type": "string",
+      "description": "The requirement or question being addressed"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["complete", "information required", "review required"],
+      "description": "Assessment status: complete = fully evaluated, information required = missing evidence, review required = needs human review"
+    },
+    "test": {
+      "type": "string",
+      "description": "Brief description of testing methodology (e.g., 'Reviewed policy documents and management review records')"
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Structured list of evidence documents supporting the finding",
+      "items": {
+        "type": "object",
+        "required": ["num", "document"],
+        "properties": {
+          "num": {
+            "type": "integer",
+            "description": "Evidence item number (1, 2, 3...)"
+          },
+          "document": {
+            "type": "string",
+            "description": "Document name (e.g., 'ISMS_Plan_EPS.docx')"
+          },
+          "section": {
+            "type": "string",
+            "description": "Relevant section within the document"
+          },
+          "path": {
+            "type": "string",
+            "description": "Full path to the document for QA verification"
+          }
+        }
+      }
+    },
+    "observations": {
+      "type": "string",
+      "description": "Brief observation(s) about the finding"
+    },
+    "requests": {
+      "type": "string",
+      "description": "Information requests if status is 'information required', otherwise 'None'"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Professional summary suitable for external reporting"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Internal explanation of reasoning with evidence path references for QA verification"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata about the task execution",
+      "properties": {
+        "duration_ms": {"type": "integer"},
+        "tools_used": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "files_processed": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    }
+  }
+}
