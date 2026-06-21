@@ -262,14 +262,16 @@ func (p *Provider) handleHealth(call *toolspec.ToolCall) (*toolspec.Result, erro
 		issues = append(issues, fmt.Sprintf("base directory does not exist: %s", baseDir))
 	}
 
-	// Check if at least one LLM is enabled
-	if !p.config.HasEnabledLLM() {
-		issues = append(issues, "no LLMs are enabled - edit config.json and set enabled: true for at least one LLM")
-	}
-
-	// Check if first run
-	if p.config.IsFirstRun() {
-		issues = append(issues, "this is a first run - configuration was just created, please review and configure")
+	// LLM selection and the config file are owned by the host under host-dispatch
+	// — Maestro has no knowledge of LLMs there, so the LLM/config/first-run checks
+	// only apply to a standalone Maestro that manages its own config.
+	if !p.hostDispatched {
+		if !p.config.HasEnabledLLM() {
+			issues = append(issues, "no LLMs are enabled - edit config.json and set enabled: true for at least one LLM")
+		}
+		if p.config.IsFirstRun() {
+			issues = append(issues, "this is a first run - configuration was just created, please review and configure")
+		}
 	}
 
 	// Build result
@@ -285,9 +287,15 @@ func (p *Provider) handleHealth(call *toolspec.ToolCall) (*toolspec.Result, erro
 		"program_name": global.ProgramName,
 		"version":      global.Version,
 		"base_dir":     baseDir,
-		"config_path":  p.config.ConfigPath(),
-		"first_run":    p.config.IsFirstRun(),
-		"enabled_llms": len(p.config.EnabledLLMs()),
+	}
+
+	if p.hostDispatched {
+		// The host owns LLM dispatch; Maestro neither configures nor counts LLMs.
+		result["dispatch"] = "host"
+	} else {
+		result["config_path"] = p.config.ConfigPath()
+		result["first_run"] = p.config.IsFirstRun()
+		result["enabled_llms"] = len(p.config.EnabledLLMs())
 	}
 
 	if len(issues) > 0 {

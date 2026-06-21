@@ -403,7 +403,7 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 		},
 		{
 			Name:        global.ToolHealth,
-			Description: "Check Maestro health status. Returns whether the system is healthy and any issues that need to be resolved, such as missing configuration or disabled LLMs.",
+			Description: "Check Maestro health status. Returns whether the system is healthy and any issues that need to be resolved (e.g. a missing base directory). When the host owns LLM dispatch, no LLM configuration is reported.",
 			Parameters:  []toolspec.Parameter{},
 			Handler:     p.handleHealth,
 			Hints:       &toolspec.ToolHints{ReadOnly: toolspec.Allow(true)},

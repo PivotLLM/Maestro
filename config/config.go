@@ -200,6 +200,33 @@ func WithEmbeddedFS(efs embed.FS) Option {
 	}
 }
 
+// WithBaseDir sets the base directory programmatically, for hosts that embed
+// Maestro and configure it without a config file. Pair with Prepare() to derive
+// and create the standard subdirectories (playbooks/, projects/, agents/) under it.
+func WithBaseDir(path string) Option {
+	return func(c *Config) {
+		if c.data == nil {
+			c.data = &configData{}
+		}
+		c.data.BaseDir = path
+	}
+}
+
+// Prepare initializes a programmatically-configured Config — no config file is
+// read or written and no LLM config is validated (an embedding host owns LLM
+// selection via an injected Dispatcher). It resolves the base directory set by
+// WithBaseDir and derives + creates the standard subdirectories. Use this instead
+// of Load() when embedding Maestro.
+func (c *Config) Prepare() error {
+	if c.data == nil {
+		c.data = &configData{}
+	}
+	if err := c.resolveBaseDir(); err != nil {
+		return err
+	}
+	return c.normalizePaths()
+}
+
 // Load loads and validates configuration from file
 // If the base directory or config file doesn't exist, it creates them from embedded defaults
 func (c *Config) Load() error {

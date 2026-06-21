@@ -92,6 +92,20 @@ func (r *DispatchResult) ProviderReportedError() bool {
 	return false
 }
 
+// Dispatcher is the LLM-execution seam the runner depends on. The built-in
+// *Service satisfies it for the standalone binary; a host (e.g. ClawEh) injects
+// its own implementation so that *the host* decides which model to call and how
+// to run it. Maestro's tools only describe the work (a DispatchRequest); the
+// Dispatcher turns it into a DispatchResult. The metadata methods let the runner
+// log and (when standalone) probe/recover; a host implementation may return
+// minimal descriptors since it owns model selection.
+type Dispatcher interface {
+	Dispatch(req *DispatchRequest) (*DispatchResult, error)
+	GetLLM(llmID string) *config.LLM
+	GetExecInfo(llmID string) *LLMExecInfo
+	TestLLM(llmID string) (bool, error)
+}
+
 // NewService creates a new LLM service
 func NewService(cfg *config.Config, logger *logging.Logger, libraryService *library.Service) *Service {
 	llmConfig := make(map[string]*config.LLM)

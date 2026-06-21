@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/PivotLLM/Maestro/config"
+	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/lists"
 	"github.com/PivotLLM/Maestro/llm"
 	"github.com/PivotLLM/Maestro/logging"
@@ -23,6 +24,11 @@ import (
 type HostDeps struct {
 	Logger *logging.Logger
 	Runner *runner.Runner
+	// Dispatcher, when set, makes the host own LLM selection and execution:
+	// Maestro's tools only describe the work (a DispatchRequest) and this turns
+	// it into a DispatchResult. With a host Dispatcher present, Maestro does not
+	// choose the model and the LLM-management tools are not exposed.
+	Dispatcher llm.Dispatcher
 }
 
 // Provider implements toolspec.ToolProvider for Maestro.
@@ -37,6 +43,7 @@ type Provider struct {
 	llm                *llm.Service
 	runner             *runner.Runner
 	markNonDestructive bool
+	hostDispatched     bool
 	deps               toolspec.Deps
 }
 
@@ -52,6 +59,7 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 
 	// Initialize logger and runner from Host if provided
 	var rInst *runner.Runner
+	var hostDispatcher llm.Dispatcher
 	if hd, ok := deps.Host.(HostDeps); ok {
 		if hd.Logger != nil {
 			p.logger = hd.Logger
@@ -61,6 +69,7 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 		if hd.Runner != nil {
 			rInst = hd.Runner
 		}
+		hostDispatcher = hd.Dispatcher
 	} else if l, ok := deps.Host.(*logging.Logger); ok && l != nil {
 		// Fallback for previous implementation
 		p.logger = l
@@ -92,15 +101,44 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 		lists.WithLogger(p.logger),
 	)
 	p.llm = llm.NewService(cfg, p.logger, nil)
-	
+
+	// The runner dispatches through the host's Dispatcher when one is injected
+	// (the host owns model selection); otherwise it uses Maestro's own llm.Service.
+	dispatcher := llm.Dispatcher(p.llm)
+	if hostDispatcher != nil {
+		dispatcher = hostDispatcher
+		p.hostDispatched = true
+	}
+
 	if rInst != nil {
 		p.runner = rInst
 	} else {
-		p.runner = runner.New(cfg, p.logger, nil, p.playbooks, p.reference, p.llm, p.tasks, p.projects)
+		p.runner = runner.New(cfg, p.logger, nil, p.playbooks, p.reference, dispatcher, p.tasks, p.projects)
 	}
 	p.markNonDestructive = cfg.MarkNonDestructive()
 
-	return p.getToolDefinitions()
+	defs := p.getToolDefinitions()
+	if p.hostDispatched {
+		// The host owns LLM selection, so Maestro does not expose the
+		// LLM-management tools — its tools only describe work to dispatch.
+		defs = withoutTools(defs, global.ToolLLMList, global.ToolLLMDispatch, global.ToolLLMTest)
+	}
+	return defs
+}
+
+// withoutTools returns defs with any tool whose Name matches one of names removed.
+func withoutTools(defs []toolspec.ToolDefinition, names ...string) []toolspec.ToolDefinition {
+	drop := make(map[string]bool, len(names))
+	for _, n := range names {
+		drop[n] = true
+	}
+	out := defs[:0]
+	for _, d := range defs {
+		if !drop[d.Name] {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // createJSONResult formats data as a toolspec.Result
