@@ -6,7 +6,7 @@ require (
 	github.com/PivotLLM/toolspec v0.1.0
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
-	github.com/mark3labs/mcp-go v0.54.1
+	github.com/mark3labs/mcp-go v0.55.0
 	github.com/tenebris-tech/x2md v0.0.3
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
