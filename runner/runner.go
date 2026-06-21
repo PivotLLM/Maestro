@@ -6,11 +6,9 @@
 package runner
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -731,7 +729,7 @@ func (r *Runner) GetTaskStatus(project, path, taskType string) (*TaskStatusResul
 
 // Run executes eligible tasks for a project in the background
 // Returns immediately with the count of tasks queued
-func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunResult, error) {
+func (r *Runner) Run(ctx context.Context, req *global.RunRequest, notify CompletionSink) (*global.RunResult, error) {
 	// Validate project exists
 	if !r.tasks.ProjectExists(req.Project) {
 		return nil, fmt.Errorf("project not found: %s", req.Project)
@@ -855,6 +853,7 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest) (*global.RunRe
 		taskSetList:   taskSetList,
 		eligibleTasks: eligibleTasks,
 		result:        result,
+		notify:        notify,
 	}
 
 	// Async execution - return immediately
@@ -876,6 +875,7 @@ type runExecutionParams struct {
 	taskSetList   *tasks.TaskSetListResult
 	eligibleTasks []*global.Task
 	result        *global.RunResult
+	notify        CompletionSink // host completion sink; nil ⇒ no callback
 }
 
 // executeRun performs the actual task execution (shared between sync and async modes)
@@ -987,10 +987,11 @@ func (r *Runner) executeRun(params *runExecutionParams) {
 		}
 	}
 
-	// Fire callbacks only for tasksets that were part of this run
+	// Fire a completion callback for every taskset that was part of this run.
+	// Delivery is via the injected sink (sendCallback no-ops when none is set).
 	for _, ts := range params.taskSetList.TaskSets {
-		if ts.CallbackURL != "" && executedTaskSetPaths[ts.Path] {
-			r.sendCallback(params.req.Project, ts)
+		if executedTaskSetPaths[ts.Path] {
+			r.sendCallback(params.req.Project, ts, params.notify)
 		}
 	}
 }
@@ -3312,8 +3313,14 @@ const (
 	callbackEventFailed    = "failed"
 )
 
-// callbackTask represents a single task's status in a callback payload
-type callbackTask struct {
+// CompletionSink receives the JSON-encoded CallbackPayload when a taskset run
+// finishes. An embedding host (e.g. ClawEh) injects one to deliver the
+// completion to the agent; standalone Maestro passes nil (no callback). This
+// replaces the former HTTP callback_url POST.
+type CompletionSink func(payloadJSON []byte)
+
+// CallbackTask represents a single task's status in a callback payload.
+type CallbackTask struct {
 	ID                   int    `json:"id"`
 	UUID                 string `json:"uuid"`
 	Title                string `json:"title"`
@@ -3323,23 +3330,29 @@ type callbackTask struct {
 	RetrievalInstruction string `json:"retrieval_instruction"`
 }
 
-// callbackPayload is the JSON body sent to a callback URL
-type callbackPayload struct {
+// CallbackPayload is the JSON document delivered to the CompletionSink when a
+// taskset run finishes.
+type CallbackPayload struct {
 	Event        string         `json:"event"` // "completed" or "failed"
 	Project      string         `json:"project"`
 	Path         string         `json:"path"`
 	CompletedAt  time.Time      `json:"completed_at"`
 	ErrorCode    string         `json:"error_code,omitempty"`    // Machine-readable failure code (event=failed only)
 	ErrorMessage string         `json:"error_message,omitempty"` // Human-readable failure message (event=failed only)
-	Tasks        []callbackTask `json:"tasks"`
+	Tasks        []CallbackTask `json:"tasks"`
 }
 
-// sendCallback fires a POST callback to the taskset's CallbackURL with final task statuses.
-// The event field and top-level error info are derived from the reloaded task statuses:
-// "completed" if every task is done, otherwise "failed" with the first non-done task's
-// error_code/error_message surfaced at the payload root.
-// Errors are logged but do not affect execution (fire and forget).
-func (r *Runner) sendCallback(project string, ts *global.TaskSet) {
+// sendCallback delivers a completion callback for a finished taskset to the
+// injected CompletionSink (the host turns it into an agent notification). The
+// event field and top-level error info are derived from the reloaded task
+// statuses: "completed" if every task is done, otherwise "failed" with the first
+// non-done task's error_code/error_message surfaced at the payload root.
+// No-op when no sink is injected (standalone Maestro). Fire and forget.
+func (r *Runner) sendCallback(project string, ts *global.TaskSet, notify CompletionSink) {
+	if notify == nil {
+		return
+	}
+
 	// Reload the taskset from disk to get final per-task statuses
 	reloaded, err := r.tasks.GetTaskSet(project, ts.Path)
 	if err != nil {
@@ -3355,7 +3368,7 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet) {
 
 	event := callbackEventCompleted
 	var topErrorCode, topErrorMessage string
-	tasks := make([]callbackTask, 0, len(reloaded.Tasks))
+	tasks := make([]CallbackTask, 0, len(reloaded.Tasks))
 
 	for _, task := range reloaded.Tasks {
 		if task.Work.Status != global.ExecutionStatusDone {
@@ -3365,7 +3378,7 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet) {
 				topErrorMessage = task.Work.Error
 			}
 		}
-		tasks = append(tasks, callbackTask{
+		tasks = append(tasks, CallbackTask{
 			ID:                   task.ID,
 			UUID:                 task.UUID,
 			Title:                task.Title,
@@ -3380,7 +3393,7 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet) {
 		topErrorCode = "task_failed"
 	}
 
-	payload := callbackPayload{
+	payload := CallbackPayload{
 		Event:        event,
 		Project:      project,
 		Path:         reloaded.Path,
@@ -3396,21 +3409,10 @@ func (r *Runner) sendCallback(project string, ts *global.TaskSet) {
 		return
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post(ts.CallbackURL, "application/json", bytes.NewReader(data))
-	if err != nil {
-		r.logger.Errorf("Callback: POST to %s failed: %v", ts.CallbackURL, err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		r.logger.Warnf("Callback: POST to %s returned status %d (event=%s)", ts.CallbackURL, resp.StatusCode, event)
-	} else {
-		r.logger.Infof("Callback: POST to %s returned status %d (event=%s)", ts.CallbackURL, resp.StatusCode, event)
-		if err := r.tasks.MarkCallbackDelivered(project, ts.Path); err != nil {
-			r.logger.Warnf("Callback: failed to mark callback delivered for %s: %v", ts.Path, err)
-		}
+	notify(data)
+	r.logger.Infof("Callback: delivered completion for taskset %s (event=%s)", ts.Path, event)
+	if err := r.tasks.MarkCallbackDelivered(project, ts.Path); err != nil {
+		r.logger.Warnf("Callback: failed to mark callback delivered for %s: %v", ts.Path, err)
 	}
 }
 
@@ -3441,7 +3443,7 @@ type DispatchResult struct {
 // RunDispatch creates a single-task taskset and executes it asynchronously.
 // Returns immediately with status "running". Fires a callback when complete if CallbackURL is set.
 // Dispatches run concurrently with regular runs and other dispatches.
-func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
+func (r *Runner) RunDispatch(req *DispatchRequest, notify CompletionSink) (*DispatchResult, error) {
 	// Validate project exists
 	if !r.tasks.ProjectExists(req.Project) {
 		return nil, fmt.Errorf("project not found: %s", req.Project)
@@ -3496,7 +3498,7 @@ func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
 	// Execute asynchronously - does NOT use runningProjects lock so dispatches
 	// run concurrently with regular runs and other dispatches
 	r.activeRuns.Add(1)
-	go r.runDispatchExecution(req, task, path, r.tasks.GetTask)
+	go r.runDispatchExecution(req, task, path, r.tasks.GetTask, notify)
 
 	return result, nil
 }
@@ -3506,7 +3508,7 @@ func (r *Runner) RunDispatch(req *DispatchRequest) (*DispatchResult, error) {
 // so tests can drive specific failure paths (e.g. GetTask failing after a successful
 // CreateTask) deterministically by injecting initialLoadTask.
 func (r *Runner) runDispatchExecution(req *DispatchRequest, task *global.Task, path string,
-	initialLoadTask func(project, taskUUID string) (*global.Task, string, error)) {
+	initialLoadTask func(project, taskUUID string) (*global.Task, string, error), notify CompletionSink) {
 	defer r.activeRuns.Done()
 
 	// Always remove the dispatch lock file when the goroutine exits.
@@ -3523,7 +3525,7 @@ func (r *Runner) runDispatchExecution(req *DispatchRequest, task *global.Task, p
 	if err != nil {
 		r.logger.Errorf("Dispatch: failed to load task %s: %v", task.UUID, err)
 		r.failTaskPreExecution(req.Project, task, "task_load_failed", err.Error(), nil)
-		r.dispatchCallback(req.Project, path, req.CallbackURL)
+		r.dispatchCallback(req.Project, path, notify)
 		return
 	}
 
@@ -3547,13 +3549,13 @@ func (r *Runner) runDispatchExecution(req *DispatchRequest, task *global.Task, p
 		}
 	}
 
-	r.dispatchCallback(req.Project, path, req.CallbackURL)
+	r.dispatchCallback(req.Project, path, notify)
 }
 
-// dispatchCallback loads the taskset and fires the callback if a URL is configured.
-// Any errors are logged; this is fire-and-forget.
-func (r *Runner) dispatchCallback(project, path, callbackURL string) {
-	if callbackURL == "" {
+// dispatchCallback loads the taskset and delivers the completion to the sink
+// (no-op when no sink is injected). Any errors are logged; fire-and-forget.
+func (r *Runner) dispatchCallback(project, path string, notify CompletionSink) {
+	if notify == nil {
 		return
 	}
 	ts, err := r.tasks.GetTaskSet(project, path)
@@ -3561,5 +3563,5 @@ func (r *Runner) dispatchCallback(project, path, callbackURL string) {
 		r.logger.Errorf("Dispatch: failed to load taskset for callback: %v", err)
 		return
 	}
-	r.sendCallback(project, ts)
+	r.sendCallback(project, ts, notify)
 }

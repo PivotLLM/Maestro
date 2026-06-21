@@ -125,6 +125,9 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 		// The host owns LLM selection, so Maestro does not expose the
 		// LLM-management tools — its tools only describe work to dispatch.
 		defs = withoutTools(defs, global.ToolLLMList, global.ToolLLMDispatch, global.ToolLLMTest)
+		// The host delivers completions via the injected sink, so the legacy
+		// HTTP callback_url parameter is meaningless here — hide it.
+		defs = withoutParam(defs, "callback_url")
 	}
 	return defs
 }
@@ -142,6 +145,21 @@ func withoutTools(defs []toolspec.ToolDefinition, names ...string) []toolspec.To
 		}
 	}
 	return out
+}
+
+// withoutParam returns defs with the named parameter removed from every tool.
+func withoutParam(defs []toolspec.ToolDefinition, param string) []toolspec.ToolDefinition {
+	for i := range defs {
+		params := defs[i].Parameters
+		filtered := params[:0]
+		for _, prm := range params {
+			if prm.Name != param {
+				filtered = append(filtered, prm)
+			}
+		}
+		defs[i].Parameters = filtered
+	}
+	return defs
 }
 
 // createJSONResult formats data as a toolspec.Result

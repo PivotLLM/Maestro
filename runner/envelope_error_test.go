@@ -176,7 +176,7 @@ func runEnvelopeGateCase(t *testing.T, c envelopeRunnerCase) {
 		t.Fatalf("create task: %v", err)
 	}
 
-	if _, err := tr.Run(context.Background(), &global.RunRequest{Project: projectName}); err != nil {
+	if _, err := tr.Run(context.Background(), &global.RunRequest{Project: projectName}, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	tr.Runner.Wait()

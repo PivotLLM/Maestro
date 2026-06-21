@@ -44,7 +44,7 @@ func (p *Provider) handleTaskRun(call *toolspec.ToolCall) (*toolspec.Result, err
 		runReq.Parallel = &parallelVal
 	}
 
-	result, err := p.runner.Run(call.Ctx, runReq)
+	result, err := p.runner.Run(call.Ctx, runReq, completionSink(call))
 	if err != nil {
 		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to run tasks: %v", err)), IsError: true}, nil
 	}

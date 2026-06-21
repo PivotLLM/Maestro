@@ -8,9 +8,6 @@ package runner
 import (
 	"encoding/json"
 	"errors"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,10 +108,10 @@ func setupTestRunnerWithLLMConfig(t *testing.T, llmsJSON, defaultLLM string) (*t
 	}, tmpDir
 }
 
-// callbackRecorder is a goroutine-safe recorder for inbound callback POSTs.
+// callbackRecorder is a goroutine-safe recorder for CompletionSink deliveries.
 type callbackRecorder struct {
 	mu       sync.Mutex
-	received []callbackPayload
+	received []CallbackPayload
 	rawBody  []string
 	done     chan struct{}
 	once     sync.Once
@@ -124,23 +121,19 @@ func newCallbackRecorder() *callbackRecorder {
 	return &callbackRecorder{done: make(chan struct{})}
 }
 
-func (c *callbackRecorder) handler(w http.ResponseWriter, r *http.Request) {
-	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
-
-	var payload callbackPayload
+// sink is a runner.CompletionSink that records each delivered payload.
+func (c *callbackRecorder) sink(body []byte) {
+	var payload CallbackPayload
 	if err := json.Unmarshal(body, &payload); err == nil {
 		c.mu.Lock()
 		c.received = append(c.received, payload)
 		c.rawBody = append(c.rawBody, string(body))
 		c.mu.Unlock()
 	}
-
-	w.WriteHeader(http.StatusOK)
 	c.once.Do(func() { close(c.done) })
 }
 
-func (c *callbackRecorder) wait(t *testing.T, d time.Duration) callbackPayload {
+func (c *callbackRecorder) wait(t *testing.T, d time.Duration) CallbackPayload {
 	t.Helper()
 	select {
 	case <-c.done:
@@ -171,8 +164,6 @@ func TestDispatch_NoLLMsEnabled(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	rec := newCallbackRecorder()
-	srv := httptest.NewServer(http.HandlerFunc(rec.handler))
-	defer srv.Close()
 
 	projectName := "test-project"
 	if _, err := runner.projects.Create(projectName, "Test Project", "no-llm dispatch test", "", "", "none"); err != nil {
@@ -180,14 +171,13 @@ func TestDispatch_NoLLMsEnabled(t *testing.T) {
 	}
 
 	req := &DispatchRequest{
-		Project:     projectName,
-		Path:        "dispatch/no-llm",
-		Title:       "no-llm dispatch",
-		Prompt:      "this prompt should never reach an LLM",
-		CallbackURL: srv.URL,
+		Project: projectName,
+		Path:    "dispatch/no-llm",
+		Title:   "no-llm dispatch",
+		Prompt:  "this prompt should never reach an LLM",
 	}
 
-	dispatchResult, err := runner.RunDispatch(req)
+	dispatchResult, err := runner.RunDispatch(req, rec.sink)
 	if err != nil {
 		t.Fatalf("RunDispatch returned error: %v", err)
 	}
@@ -280,8 +270,6 @@ func TestDispatch_BuildPromptFailure(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	rec := newCallbackRecorder()
-	srv := httptest.NewServer(http.HandlerFunc(rec.handler))
-	defer srv.Close()
 
 	projectName := "test-project"
 	if _, err := runner.projects.Create(projectName, "Test Project", "buildPrompt failure test", "", "", "none"); err != nil {
@@ -295,10 +283,9 @@ func TestDispatch_BuildPromptFailure(t *testing.T) {
 		Prompt:                 "irrelevant",
 		InstructionsFile:       "does-not-exist.txt",
 		InstructionsFileSource: "project_files",
-		CallbackURL:            srv.URL,
 	}
 
-	dispatchResult, err := runner.RunDispatch(req)
+	dispatchResult, err := runner.RunDispatch(req, rec.sink)
 	if err != nil {
 		t.Fatalf("RunDispatch returned error: %v", err)
 	}
@@ -358,8 +345,6 @@ func TestDispatch_SuccessCallback(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	rec := newCallbackRecorder()
-	srv := httptest.NewServer(http.HandlerFunc(rec.handler))
-	defer srv.Close()
 
 	projectName := "test-project"
 	if _, err := runner.projects.Create(projectName, "Test Project", "dispatch success test", "", "", "none"); err != nil {
@@ -367,14 +352,13 @@ func TestDispatch_SuccessCallback(t *testing.T) {
 	}
 
 	req := &DispatchRequest{
-		Project:     projectName,
-		Path:        "dispatch/ok",
-		Title:       "ok dispatch",
-		Prompt:      "hello",
-		CallbackURL: srv.URL,
+		Project: projectName,
+		Path:    "dispatch/ok",
+		Title:   "ok dispatch",
+		Prompt:  "hello",
 	}
 
-	if _, err := runner.RunDispatch(req); err != nil {
+	if _, err := runner.RunDispatch(req, rec.sink); err != nil {
 		t.Fatalf("RunDispatch returned error: %v", err)
 	}
 
@@ -426,8 +410,6 @@ func TestDispatch_GetTaskFailureAfterCreate(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	rec := newCallbackRecorder()
-	srv := httptest.NewServer(http.HandlerFunc(rec.handler))
-	defer srv.Close()
 
 	projectName := "test-project"
 	if _, err := runner.projects.Create(projectName, "Test Project", "GetTask failure test", "", "", "none"); err != nil {
@@ -439,7 +421,7 @@ func TestDispatch_GetTaskFailureAfterCreate(t *testing.T) {
 	// failed. Only the early GetTask call is mocked.
 	path := "dispatch/get-task-fails"
 	title := "get-task-fails dispatch"
-	if _, err := runner.tasks.CreateTaskSet(projectName, path, title, "", nil, false, global.Limits{}, true, srv.URL); err != nil {
+	if _, err := runner.tasks.CreateTaskSet(projectName, path, title, "", nil, false, global.Limits{}, true, ""); err != nil {
 		t.Fatalf("Failed to create taskset: %v", err)
 	}
 	work := &global.WorkExecution{
@@ -452,11 +434,10 @@ func TestDispatch_GetTaskFailureAfterCreate(t *testing.T) {
 	}
 
 	req := &DispatchRequest{
-		Project:     projectName,
-		Path:        path,
-		Title:       title,
-		Prompt:      "irrelevant",
-		CallbackURL: srv.URL,
+		Project: projectName,
+		Path:    path,
+		Title:   title,
+		Prompt:  "irrelevant",
 	}
 
 	failingGetTask := func(_, _ string) (*global.Task, string, error) {
@@ -464,7 +445,7 @@ func TestDispatch_GetTaskFailureAfterCreate(t *testing.T) {
 	}
 
 	runner.activeRuns.Add(1)
-	runner.runDispatchExecution(req, task, path, failingGetTask)
+	runner.runDispatchExecution(req, task, path, failingGetTask, rec.sink)
 
 	payload := rec.wait(t, 5*time.Second)
 	runner.Wait()

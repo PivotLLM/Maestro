@@ -355,7 +355,7 @@ func TestRunReturnsImmediately(t *testing.T) {
 	start := time.Now()
 	result, err := runner.Run(context.Background(), &global.RunRequest{
 		Project: projectName,
-	})
+	}, nil)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -412,7 +412,7 @@ func TestRunConcurrencyPrevention(t *testing.T) {
 	// Start first run
 	result1, err := runner.Run(context.Background(), &global.RunRequest{
 		Project: projectName,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("First Run failed: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestRunConcurrencyPrevention(t *testing.T) {
 	// Immediately try to start second run (before first completes)
 	result2, err := runner.Run(context.Background(), &global.RunRequest{
 		Project: projectName,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("Second Run failed: %v", err)
 	}
@@ -482,7 +482,7 @@ func TestGetTaskStatusShowsRunInProgress(t *testing.T) {
 	// Start run
 	_, err = runner.Run(context.Background(), &global.RunRequest{
 		Project: projectName,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
@@ -584,7 +584,7 @@ func TestRunDispatch_ProjectNotFound(t *testing.T) {
 		Prompt:  "test prompt",
 	}
 
-	result, err := runner.RunDispatch(req)
+	result, err := runner.RunDispatch(req, nil)
 	if err == nil {
 		t.Error("Expected error for nonexistent project, got nil")
 	}
@@ -612,7 +612,7 @@ func TestRunDispatch_NoPrompt(t *testing.T) {
 
 	// RunDispatch will succeed in creating the taskset but fail on CreateTask
 	// because work requires at least one prompt field.
-	result, err := runner.RunDispatch(req)
+	result, err := runner.RunDispatch(req, nil)
 	if err == nil {
 		t.Error("Expected error when dispatching with no prompt/instructions, got nil")
 	}

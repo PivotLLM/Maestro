@@ -794,6 +794,9 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 			},
 			Handler: p.handleTaskDispatch,
 			Hints:   nil,
+			// Runs in the background; the host receives a completion notification
+			// via ToolCall.Notify when the task finishes.
+			Async: true,
 		},
 		{
 			Name:        global.ToolTaskSetDelete,
@@ -912,6 +915,9 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 			},
 			Handler: p.handleTaskRun,
 			Hints:   nil,
+			// Runs in the background; the host receives a completion notification
+			// via ToolCall.Notify when every task finishes.
+			Async: true,
 		},
 		{
 			Name:        global.ToolTaskStatus,
@@ -970,7 +976,7 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 		{
 			Name:        global.ToolSupervisorUpdate,
 			Description: "Allows a supervisor to replace the worker response with their own content. The response must pass template validation. History is append-only.",
-			Parameters:  []toolspec.Parameter{
+			Parameters: []toolspec.Parameter{
 				{Name: "project", Type: "string", Description: "Project name", Required: true},
 				{Name: "uuid", Type: "string", Description: "Task UUID", Required: true},
 				{Name: "response", Type: "string", Description: "Supervisor's replacement response (must match worker_response_template if defined)", Required: true},
@@ -981,7 +987,7 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 		{
 			Name:        global.ToolReportCreate,
 			Description: "Generate reports from task results. Uses the same report generation logic as the runner. Supports optional path filtering.",
-			Parameters:  []toolspec.Parameter{
+			Parameters: []toolspec.Parameter{
 				{Name: "project", Type: "string", Description: "Project name", Required: true},
 				{Name: "path", Type: "string", Description: "Task set path prefix to filter (optional)", Required: false},
 			},

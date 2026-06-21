@@ -722,7 +722,7 @@ func (p *Provider) handleTaskDispatch(call *toolspec.ToolCall) (*toolspec.Result
 		CallbackURL:            callbackURL,
 	}
 
-	result, err := p.runner.RunDispatch(dispatchReq)
+	result, err := p.runner.RunDispatch(dispatchReq, completionSink(call))
 	if err != nil {
 		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
 	}
