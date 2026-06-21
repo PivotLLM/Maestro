@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "base_dir": "~/.maestro",
+  "chroot": "~/.maestro/data",
+  "playbooks_dir": "data/playbooks",
+  "projects_dir": "data/projects",
+  "agents_dir": "agents",
+  "extra_path": [],
+  "reference_dirs": [
+    {"path": "data/reference", "mount": "user"}
+  ],
+  "mark_non_destructive": false,
+  "default_llm": "claude",
+  "llms": [
+    {
+      "id": "claude",
+      "type": "command",
+      "stdin": true,
+      "command": "claude",
+      "args": ["-p", "--output-format", "json"],
+      "output_format": "claude",
+      "description": "Claude Code CLI (Anthropic). Prompt piped via stdin.",
+      "enabled": false,
+      "recovery": {
+        "rate_limit_patterns": [
+          "you've hit your limit",
+          "quota exceeded",
+          "429",
+          "will rest at"
+        ],
+        "test_prompt": "Respond with only OK",
+        "test_schedule_seconds": [30, 60, 120, 300, 900, 1800, 3600],
+        "abort_after_seconds": 43200
+      }
+    },
+    {
+      "id": "codex",
+      "aliases": ["gpt"],
+      "type": "command",
+      "stdin": true,
+      "command": "codex",
+      "args": ["exec", "--json", "--skip-git-repo-check"],
+      "output_format": "codex",
+      "description": "OpenAI Codex CLI (GPT). Prompt piped via stdin.",
+      "enabled": false,
+      "recovery": {
+        "rate_limit_patterns": [
+          "rate limit",
+          "quota exceeded",
+          "429",
+          "too many requests"
+        ],
+        "test_prompt": "Respond with only OK",
+        "test_schedule_seconds": [20, 60, 120, 300, 900, 1800, 3600],
+        "abort_after_seconds": 43200
+      }
+    },
+    {
+      "id": "gemini",
+      "type": "command",
+      "stdin": true,
+      "command": "gemini",
+      "args": ["--yolo", "--output-format", "json"],
+      "output_format": "gemini",
+      "description": "Google Gemini CLI. Prompt piped via stdin; --yolo auto-approves tool calls.",
+      "enabled": false,
+      "recovery": {
+        "rate_limit_patterns": [
+          "rate limit",
+          "quota exceeded",
+          "429",
+          "too many requests",
+          "resource exhausted"
+        ],
+        "test_prompt": "Respond with only OK",
+        "test_schedule_seconds": [30, 60, 120, 300, 900, 1800, 3600],
+        "abort_after_seconds": 43200
+      }
+    }
+  ],
+  "runner": {
+    "max_concurrent": 10,
+    "max_rounds": 5,
+    "round_delay_seconds": 30,
+    "limits": {
+      "max_retries": 5,
+      "max_worker": 2,
+      "max_qa": 2
+    },
+    "retry_delay_seconds": 60,
+    "rate_limit": {
+      "max_requests": 25,
+      "period_seconds": 60
+    }
+  },
+  "logging": {
+    "file": "maestro.log",
+    "level": "INFO"
+  }
+}

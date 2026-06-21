@@ -3,10 +3,11 @@
  * Please see the LICENSE file for details                                    *
  ******************************************************************************/
 
-package server
+package maestro
 
 import (
-	"context"
+	"github.com/PivotLLM/toolspec"
+
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,20 +16,19 @@ import (
 
 	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/reporting"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // handleTaskRun handles the task_run MCP tool
-func (s *Server) handleTaskRun(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := mcp.ParseString(req, "project", "")
-	path := mcp.ParseString(req, "path", "")
-	taskType := mcp.ParseString(req, "type", "")
-	parallelStr := mcp.ParseString(req, "parallel", "")
+func (p *Provider) handleTaskRun(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	project := parseString(call.Args, "project", "")
+	path := parseString(call.Args, "path", "")
+	taskType := parseString(call.Args, "type", "")
+	parallelStr := parseString(call.Args, "parallel", "")
 
-	s.logToolCall(global.ToolTaskRun, map[string]string{"project": project, "path": path})
+	p.logToolCall(global.ToolTaskRun, map[string]string{"project": project, "path": path})
 
 	if project == "" {
-		return mcp.NewToolResultError("project is required"), nil
+		return nil, fmt.Errorf("%s", "project is required")
 	}
 
 	// Build run request - parallel is optional override
@@ -44,50 +44,50 @@ func (s *Server) handleTaskRun(ctx context.Context, req mcp.CallToolRequest) (*m
 		runReq.Parallel = &parallelVal
 	}
 
-	result, err := s.runner.Run(ctx, runReq)
+	result, err := p.runner.Run(call.Ctx, runReq)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to run tasks: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to run tasks: %v", err)), IsError: true}, nil
 	}
 
 	return createJSONResult(result)
 }
 
 // handleTaskStatus handles the task_status MCP tool
-func (s *Server) handleTaskStatus(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := mcp.ParseString(req, "project", "")
-	path := mcp.ParseString(req, "path", "")
-	taskType := mcp.ParseString(req, "type", "")
+func (p *Provider) handleTaskStatus(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	project := parseString(call.Args, "project", "")
+	path := parseString(call.Args, "path", "")
+	taskType := parseString(call.Args, "type", "")
 
-	s.logToolCall(global.ToolTaskStatus, map[string]string{"project": project, "path": path})
+	p.logToolCall(global.ToolTaskStatus, map[string]string{"project": project, "path": path})
 
 	if project == "" {
-		return mcp.NewToolResultError("project is required"), nil
+		return nil, fmt.Errorf("%s", "project is required")
 	}
 
-	result, err := s.runner.GetTaskStatus(project, path, taskType)
+	result, err := p.runner.GetTaskStatus(project, path, taskType)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get task status: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get task status: %v", err)), IsError: true}, nil
 	}
 
 	return createJSONResult(result)
 }
 
 // handleTaskResults handles the task_results MCP tool
-func (s *Server) handleTaskResults(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := mcp.ParseString(req, "project", "")
-	path := mcp.ParseString(req, "path", "")
-	status := mcp.ParseString(req, "status", "")
-	taskID := int(mcp.ParseFloat64(req, "task_id", -1))
-	offset := int(mcp.ParseFloat64(req, "offset", 0))
-	limit := int(mcp.ParseFloat64(req, "limit", float64(global.DefaultLimit)))
-	summary := mcp.ParseBoolean(req, "summary", false)
-	workerPattern := mcp.ParseString(req, "worker_pattern", "")
-	qaPattern := mcp.ParseString(req, "qa_pattern", "")
+func (p *Provider) handleTaskResults(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	project := parseString(call.Args, "project", "")
+	path := parseString(call.Args, "path", "")
+	status := parseString(call.Args, "status", "")
+	taskID := int(parseFloat64(call.Args, "task_id", -1))
+	offset := int(parseFloat64(call.Args, "offset", 0))
+	limit := int(parseFloat64(call.Args, "limit", float64(global.DefaultLimit)))
+	summary := parseBool(call.Args, "summary", false)
+	workerPattern := parseString(call.Args, "worker_pattern", "")
+	qaPattern := parseString(call.Args, "qa_pattern", "")
 
-	s.logToolCall(global.ToolTaskResults, map[string]string{"project": project, "path": path})
+	p.logToolCall(global.ToolTaskResults, map[string]string{"project": project, "path": path})
 
 	if project == "" {
-		return mcp.NewToolResultError("project is required"), nil
+		return nil, fmt.Errorf("%s", "project is required")
 	}
 
 	resultsReq := &global.ResultsRequest{
@@ -106,9 +106,9 @@ func (s *Server) handleTaskResults(_ context.Context, req mcp.CallToolRequest) (
 		resultsReq.TaskID = &taskID
 	}
 
-	result, err := s.runner.GetResults(resultsReq)
+	result, err := p.runner.GetResults(resultsReq)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get results: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get results: %v", err)), IsError: true}, nil
 	}
 
 	return createJSONResult(result)
@@ -116,42 +116,42 @@ func (s *Server) handleTaskResults(_ context.Context, req mcp.CallToolRequest) (
 
 // handleTaskResultGet handles the task_result_get MCP tool
 // Returns a single task result with just the worker/QA responses (no history or prompts)
-func (s *Server) handleTaskResultGet(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := mcp.ParseString(req, "project", "")
-	uuid := mcp.ParseString(req, "uuid", "")
+func (p *Provider) handleTaskResultGet(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	project := parseString(call.Args, "project", "")
+	uuid := parseString(call.Args, "uuid", "")
 
-	s.logToolCall(global.ToolTaskResultGet, map[string]string{"project": project, "uuid": uuid})
+	p.logToolCall(global.ToolTaskResultGet, map[string]string{"project": project, "uuid": uuid})
 
 	if project == "" {
-		return mcp.NewToolResultError("project is required"), nil
+		return nil, fmt.Errorf("%s", "project is required")
 	}
 	if uuid == "" {
-		return mcp.NewToolResultError("uuid is required"), nil
+		return nil, fmt.Errorf("%s", "uuid is required")
 	}
 
 	// Get task to find the taskset path and template
-	task, taskPath, err := s.tasks.GetTask(project, uuid)
+	task, taskPath, err := p.tasks.GetTask(project, uuid)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get task: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get task: %v", err)), IsError: true}, nil
 	}
 
 	// Get taskset to retrieve template info
-	taskset, err := s.tasks.GetTaskSet(project, taskPath)
+	taskset, err := p.tasks.GetTaskSet(project, taskPath)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to get taskset: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get taskset: %v", err)), IsError: true}, nil
 	}
 
 	// Load the actual schema content if template is specified
 	var schemaContent string
 	if taskset.WorkerResponseTemplate != "" {
-		if content, err := s.loadTemplate(project, taskset.WorkerResponseTemplate); err == nil {
+		if content, err := p.loadTemplate(project, taskset.WorkerResponseTemplate); err == nil {
 			schemaContent = content
 		}
 		// If loading fails, we just leave schemaContent empty - not critical
 	}
 
 	// Load result file
-	resultsDir := s.tasks.GetResultsDir(project)
+	resultsDir := p.tasks.GetResultsDir(project)
 	resultPath := filepath.Join(resultsDir, uuid+".json")
 
 	data, err := os.ReadFile(resultPath)
@@ -173,12 +173,12 @@ func (s *Server) handleTaskResultGet(_ context.Context, req mcp.CallToolRequest)
 			}
 			return createJSONResult(response)
 		}
-		return mcp.NewToolResultError(fmt.Sprintf("failed to read result file: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read result file: %v", err)), IsError: true}, nil
 	}
 
 	var taskResult global.TaskResult
 	if err := json.Unmarshal(data, &taskResult); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to parse result file: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to parse result file: %v", err)), IsError: true}, nil
 	}
 
 	// Build condensed response
@@ -211,19 +211,19 @@ func (s *Server) handleTaskResultGet(_ context.Context, req mcp.CallToolRequest)
 }
 
 // handleTaskReport handles the task_report MCP tool
-func (s *Server) handleTaskReport(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := mcp.ParseString(req, "project", "")
-	path := mcp.ParseString(req, "path", "")
-	status := mcp.ParseString(req, "status", "")
-	taskType := mcp.ParseString(req, "type", "")
-	qaVerdict := mcp.ParseString(req, "qa_verdict", "")
-	format := mcp.ParseString(req, "format", "markdown")
-	outputPath := mcp.ParseString(req, "output", "")
+func (p *Provider) handleTaskReport(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	project := parseString(call.Args, "project", "")
+	path := parseString(call.Args, "path", "")
+	status := parseString(call.Args, "status", "")
+	taskType := parseString(call.Args, "type", "")
+	qaVerdict := parseString(call.Args, "qa_verdict", "")
+	format := parseString(call.Args, "format", "markdown")
+	outputPath := parseString(call.Args, "output", "")
 
-	s.logToolCall(global.ToolTaskReport, map[string]string{"project": project, "format": format})
+	p.logToolCall(global.ToolTaskReport, map[string]string{"project": project, "format": format})
 
 	if project == "" {
-		return mcp.NewToolResultError("project is required"), nil
+		return nil, fmt.Errorf("%s", "project is required")
 	}
 
 	// Build filter
@@ -242,9 +242,9 @@ func (s *Server) handleTaskReport(_ context.Context, req mcp.CallToolRequest) (*
 	}
 
 	// List all task sets for the project
-	taskSetList, err := s.tasks.ListTaskSets(project, path)
+	taskSetList, err := p.tasks.ListTaskSets(project, path)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to list task sets: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to list task sets: %v", err)), IsError: true}, nil
 	}
 
 	// Create content loaders for template loading
@@ -253,7 +253,7 @@ func (s *Server) handleTaskReport(_ context.Context, req mcp.CallToolRequest) (*
 		if len(parts) < 2 {
 			return "", fmt.Errorf("invalid playbook path: %s (expected playbook-name/path)", path)
 		}
-		item, err := s.playbooks.GetFile(parts[0], parts[1], 0, 0)
+		item, err := p.playbooks.GetFile(parts[0], parts[1], 0, 0)
 		if err != nil {
 			return "", err
 		}
@@ -261,7 +261,7 @@ func (s *Server) handleTaskReport(_ context.Context, req mcp.CallToolRequest) (*
 	})
 
 	referenceLoader := reporting.ContentLoaderFunc(func(path string) (string, error) {
-		item, err := s.reference.Get(path, 0, 0)
+		item, err := p.reference.Get(path, 0, 0)
 		if err != nil {
 			return "", err
 		}
@@ -269,7 +269,7 @@ func (s *Server) handleTaskReport(_ context.Context, req mcp.CallToolRequest) (*
 	})
 
 	projectLoader := reporting.ContentLoaderFunc(func(path string) (string, error) {
-		item, err := s.projects.GetFile(project, path, 0, 0)
+		item, err := p.projects.GetFile(project, path, 0, 0)
 		if err != nil {
 			return "", err
 		}
@@ -277,10 +277,10 @@ func (s *Server) handleTaskReport(_ context.Context, req mcp.CallToolRequest) (*
 	})
 
 	// Get results directory for loading task results
-	resultsDir := s.tasks.GetResultsDir(project)
+	resultsDir := p.tasks.GetResultsDir(project)
 
 	// Build and generate report
-	reporter := reporting.New(s.logger,
+	reporter := reporting.New(p.logger,
 		reporting.WithPlaybookLoader(playbookLoader),
 		reporting.WithReferenceLoader(referenceLoader),
 		reporting.WithProjectLoader(projectLoader),
@@ -299,15 +299,15 @@ func (s *Server) handleTaskReport(_ context.Context, req mcp.CallToolRequest) (*
 	}
 
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to generate report: %v", err)), nil
+		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to generate report: %v", err)), IsError: true}, nil
 	}
 
 	// Optionally save to file in project files directory
 	if outputPath != "" {
-		if _, err := s.projects.PutFile(project, outputPath, content, "Generated report"); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to save report: %v", err)), nil
+		if _, err := p.projects.PutFile(project, outputPath, content, "Generated report"); err != nil {
+			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to save report: %v", err)), IsError: true}, nil
 		}
 	}
 
-	return mcp.NewToolResultText(content), nil
+	return &toolspec.Result{ForLLM: content}, nil
 }
