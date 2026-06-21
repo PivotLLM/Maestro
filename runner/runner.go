@@ -35,17 +35,22 @@ import (
 
 // Runner executes tasks via configured LLMs
 type Runner struct {
-	config          *config.Config
-	logger          *logging.Logger
-	library         *library.Service
-	playbooks       *playbooks.Service
-	reference       *reference.Service
-	llm             llm.Dispatcher
-	tasks           *tasks.Service
-	projects        *projects.Service
-	reporter        *reporting.Reporter
-	validator       *templates.Validator
-	rateLimiter     *RateLimiter
+	config      *config.Config
+	logger      *logging.Logger
+	library     *library.Service
+	playbooks   *playbooks.Service
+	reference   *reference.Service
+	llm         llm.Dispatcher
+	tasks       *tasks.Service
+	projects    *projects.Service
+	reporter    *reporting.Reporter
+	validator   *templates.Validator
+	rateLimiter *RateLimiter
+	// hostDispatched is true when the LLM dispatcher is injected by an embedding
+	// host (e.g. ClawEh) that owns model selection. In that mode Maestro does not
+	// resolve, validate, or require any model of its own — it just hands the
+	// prompt to the host and lets it pick the model.
+	hostDispatched  bool
 	runningProjects sync.Map       // map[string]bool - tracks which projects have runs in progress
 	taskHistory     sync.Map       // map[string][]global.Message - accumulates history by task UUID
 	activeRuns      sync.WaitGroup // tracks active run goroutines for graceful shutdown
@@ -340,6 +345,36 @@ func New(cfg *config.Config, logger *logging.Logger, lib *library.Service, playb
 		validator:   templates.New(logger),
 		rateLimiter: NewRateLimiter(runnerConfig.RateLimit.MaxRequests, runnerConfig.RateLimit.PeriodSeconds),
 	}
+}
+
+// SetHostDispatched marks the runner as driven by a host-injected dispatcher that
+// owns model selection. In that mode the runner does not resolve or validate any
+// Maestro LLM — it dispatches the prompt and lets the host choose the model.
+func (r *Runner) SetHostDispatched(v bool) { r.hostDispatched = v }
+
+// dispatchLLMID returns the model label to record for a dispatch. Under
+// host-dispatch the host selects the model, so Maestro neither resolves aliases
+// nor validates against its own (empty) LLM config and never fails for lack of a
+// model — it returns a neutral "host" label (used only for logging/result files;
+// the host ignores it). ok is false only in standalone mode when no LLM is
+// available.
+func (r *Runner) dispatchLLMID(requested string) (id string, ok bool) {
+	if r.hostDispatched {
+		if requested != "" && requested != "default" {
+			return requested, true // preserve any explicit hint for logs only
+		}
+		return "host", true
+	}
+	if requested == "" || requested == "default" {
+		if d := r.config.DefaultLLM(); d != "" {
+			return d, true
+		}
+		if e := r.config.EnabledLLMs(); len(e) > 0 {
+			return e[0].ID, true
+		}
+		return "", false
+	}
+	return r.config.ResolveID(requested), true
 }
 
 // logToProject appends a message to the project log (best effort)
@@ -1408,31 +1443,13 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 		}
 	}
 
-	// Determine which LLM will be used
-	llmID := task.Work.LLMModelID
-	if llmID == "" || llmID == "default" {
-		// Use configured default_llm if available
-		defaultLLM := r.config.DefaultLLM()
-		if defaultLLM != "" {
-			llmID = defaultLLM
-			r.logger.Infof("Task %d: Using configured default LLM: %s", task.ID, llmID)
-		} else {
-			// Fallback to first enabled LLM
-			r.logger.Infof("Task %d: No default_llm configured, using first enabled LLM", task.ID)
-			enabledLLMs := r.config.EnabledLLMs()
-			if len(enabledLLMs) > 0 {
-				llmID = enabledLLMs[0].ID
-				r.logger.Infof("Task %d: Selected LLM: %s", task.ID, llmID)
-			} else {
-				r.logToProject(project, fmt.Sprintf("Task %d: Failed - no LLMs are enabled", task.ID))
-				r.logger.Errorf("Task %d: Failed - no LLMs are enabled", task.ID)
-				r.failTaskPreExecution(project, task, "no_llm_enabled", "no LLMs are enabled", result)
-				return
-			}
-		}
-	} else {
-		// Resolve alias to canonical id so logs and stored results always use canonical id
-		llmID = r.config.ResolveID(llmID)
+	// Determine which LLM will be used (host-dispatch: the host selects it).
+	llmID, ok := r.dispatchLLMID(task.Work.LLMModelID)
+	if !ok {
+		r.logToProject(project, fmt.Sprintf("Task %d: Failed - no LLMs are enabled", task.ID))
+		r.logger.Errorf("Task %d: Failed - no LLMs are enabled", task.ID)
+		r.failTaskPreExecution(project, task, "no_llm_enabled", "no LLMs are enabled", result)
+		return
 	}
 	// Store resolved canonical LLM ID for result file
 	task.Work.LLMModelID = llmID
@@ -2576,25 +2593,10 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 	qaPromptSize := len(qaPrompt)
 	r.logger.Infof("Task %d: QA prompt built (%d bytes)", task.ID, qaPromptSize)
 
-	// Determine QA LLM
-	qaLLMID := task.QA.LLMModelID
-	if qaLLMID == "" || qaLLMID == "default" {
-		// Use configured default LLM
-		defaultLLM := r.config.DefaultLLM()
-		if defaultLLM != "" {
-			qaLLMID = defaultLLM
-		} else {
-			// Fallback to first enabled LLM
-			enabledLLMs := r.config.EnabledLLMs()
-			if len(enabledLLMs) > 0 {
-				qaLLMID = enabledLLMs[0].ID
-			} else {
-				return fmt.Errorf("no LLMs are enabled")
-			}
-		}
-	} else {
-		// Resolve alias to canonical id so logs and stored results always use canonical id
-		qaLLMID = r.config.ResolveID(qaLLMID)
+	// Determine QA LLM (host-dispatch: the host selects it).
+	qaLLMID, ok := r.dispatchLLMID(task.QA.LLMModelID)
+	if !ok {
+		return fmt.Errorf("no LLMs are enabled")
 	}
 	// Store resolved canonical LLM ID back to task so results always record canonical form
 	task.QA.LLMModelID = qaLLMID
@@ -3017,23 +3019,10 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, budget *run
 	promptSize := len(fullPrompt)
 	r.logger.Infof("Task %d: Revised prompt built (%d bytes)", task.ID, promptSize)
 
-	// Determine LLM
-	llmID := task.Work.LLMModelID
-	if llmID == "" || llmID == "default" {
-		defaultLLM := r.config.DefaultLLM()
-		if defaultLLM != "" {
-			llmID = defaultLLM
-		} else {
-			enabledLLMs := r.config.EnabledLLMs()
-			if len(enabledLLMs) > 0 {
-				llmID = enabledLLMs[0].ID
-			} else {
-				return fmt.Errorf("no LLMs are enabled")
-			}
-		}
-	} else {
-		// Resolve alias to canonical id so logs and stored results always use canonical id
-		llmID = r.config.ResolveID(llmID)
+	// Determine LLM (host-dispatch: the host selects it).
+	llmID, ok := r.dispatchLLMID(task.Work.LLMModelID)
+	if !ok {
+		return fmt.Errorf("no LLMs are enabled")
 	}
 	// Store resolved canonical LLM ID for result file
 	task.Work.LLMModelID = llmID

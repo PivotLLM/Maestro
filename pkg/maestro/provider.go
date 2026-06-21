@@ -115,6 +115,9 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 	} else {
 		p.runner = runner.New(cfg, p.logger, nil, p.playbooks, p.reference, dispatcher, p.tasks, p.projects)
 	}
+	// Under host-dispatch the runner must not resolve or require a Maestro LLM —
+	// the host owns model selection.
+	p.runner.SetHostDispatched(p.hostDispatched)
 	p.markNonDestructive = cfg.MarkNonDestructive()
 
 	defs := p.getToolDefinitions()
