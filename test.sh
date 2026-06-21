@@ -76,10 +76,15 @@ sed -e "s|MAESTRO_TEST_ROOT|$TEST_ROOT|g" \
 ENV="OPENAI_API_KEY=test,MAESTRO_CONFIG=$CONFIG"
 
 cd $SRC
+
+# Always build
+rm -f "$MAESTRO"
+go build -o $MAESTRO
+
 # Build only if binary doesn't exist
-if [ ! -f "$MAESTRO" ]; then
-    go build -o $MAESTRO
-fi
+#if [ ! -f "$MAESTRO" ]; then
+#    go build -o $MAESTRO
+#fi
 
 
 # Test data names
