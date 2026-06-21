@@ -40,7 +40,7 @@ type Runner struct {
 	library         *library.Service
 	playbooks       *playbooks.Service
 	reference       *reference.Service
-	llm             *llm.Service
+	llm             llm.Dispatcher
 	tasks           *tasks.Service
 	projects        *projects.Service
 	reporter        *reporting.Reporter
@@ -301,7 +301,7 @@ func IsSchemaValidationError(err error) (*SchemaValidationError, bool) {
 }
 
 // New creates a new Runner
-func New(cfg *config.Config, logger *logging.Logger, lib *library.Service, playbooksSvc *playbooks.Service, refSvc *reference.Service, llmSvc *llm.Service, tasksSvc *tasks.Service, projectsSvc *projects.Service) *Runner {
+func New(cfg *config.Config, logger *logging.Logger, lib *library.Service, playbooksSvc *playbooks.Service, refSvc *reference.Service, llmSvc llm.Dispatcher, tasksSvc *tasks.Service, projectsSvc *projects.Service) *Runner {
 	runnerConfig := cfg.Runner()
 
 	// Create content loaders for report template loading
