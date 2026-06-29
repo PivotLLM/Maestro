@@ -70,6 +70,41 @@ func TestNotificationResult_Failed(t *testing.T) {
 	}
 }
 
+// TestNotificationResult_ExplicitCounts verifies the done/failed/total count is
+// surfaced in both the user block and the model summary, so a partial-failure
+// run is unmistakable without scanning every task line.
+func TestNotificationResult_ExplicitCounts(t *testing.T) {
+	// Partial failure: 2 done (one via QA-failed-but-done), 1 failed of 3.
+	res := notificationResult(&runner.CallbackPayload{
+		Event:   "failed",
+		Project: "proj",
+		Path:    "taskset/c",
+		Tasks: []runner.CallbackTask{
+			{ID: 1, Title: "T1", Status: "done"},
+			{ID: 2, Title: "T2", Status: "done (QA failed)"},
+			{ID: 3, Title: "T3", Status: "failed", Error: "boom"},
+		},
+	})
+	const want = "2 done, 1 failed of 3 task(s)"
+	if !strings.Contains(res.ForUser, want) {
+		t.Errorf("ForUser missing count %q: %q", want, res.ForUser)
+	}
+	if !strings.Contains(res.ForLLM, want) {
+		t.Errorf("ForLLM missing count %q: %q", want, res.ForLLM)
+	}
+
+	// Clean success: 1 done, 0 failed.
+	ok := notificationResult(&runner.CallbackPayload{
+		Event:   "completed",
+		Project: "proj",
+		Path:    "taskset/d",
+		Tasks:   []runner.CallbackTask{{ID: 1, Title: "T1", Status: "done"}},
+	})
+	if !strings.Contains(ok.ForUser, "1 done, 0 failed of 1 task(s)") {
+		t.Errorf("ForUser missing success count: %q", ok.ForUser)
+	}
+}
+
 // TestHostDispatch_StripsCallbackURLParam verifies that under host-dispatch the
 // callback_url parameter is removed from the exposed tool schemas (the host
 // delivers completions via the injected sink instead).

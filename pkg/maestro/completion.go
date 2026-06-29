@@ -43,21 +43,38 @@ func completionSink(call *toolspec.ToolCall) runner.CompletionSink {
 func notificationResult(cp *runner.CallbackPayload) *toolspec.Result {
 	failed := cp.Event != "completed"
 
+	// Explicit done/failed/total counts so a partial-failure run is unmistakable
+	// at a glance, without scanning every task line. "done" covers terminal
+	// success (including "done (QA failed)"); any other non-done terminal status
+	// (e.g. "escalate") is neither done nor failed, so the total keeps the picture
+	// complete.
+	total := len(cp.Tasks)
+	done, failedCount := 0, 0
+	for _, t := range cp.Tasks {
+		switch {
+		case strings.HasPrefix(t.Status, "done"):
+			done++
+		case t.Status == "failed":
+			failedCount++
+		}
+	}
+	counts := fmt.Sprintf("%d done, %d failed of %d task(s)", done, failedCount, total)
+
 	var u strings.Builder
 	u.WriteString("━━━ TASK NOTIFICATION ━━━\n")
 	if failed {
-		fmt.Fprintf(&u, "Maestro taskset '%s' (project '%s') finished with failures.\n", cp.Path, cp.Project)
+		fmt.Fprintf(&u, "Maestro taskset '%s' (project '%s') finished with failures: %s.\n", cp.Path, cp.Project, counts)
 		if cp.ErrorMessage != "" {
 			fmt.Fprintf(&u, "Error: %s\n", cp.ErrorMessage)
 		}
 	} else {
-		fmt.Fprintf(&u, "Maestro taskset '%s' (project '%s') completed: all %d task(s) done.\n", cp.Path, cp.Project, len(cp.Tasks))
+		fmt.Fprintf(&u, "Maestro taskset '%s' (project '%s') completed: %s.\n", cp.Path, cp.Project, counts)
 	}
 	u.WriteString("━━━")
 
 	var l strings.Builder
-	fmt.Fprintf(&l, "[TASK NOTIFICATION] Maestro taskset '%s' in project '%s' finished — event: %s (%d task(s)).\n",
-		cp.Path, cp.Project, cp.Event, len(cp.Tasks))
+	fmt.Fprintf(&l, "[TASK NOTIFICATION] Maestro taskset '%s' in project '%s' finished — event: %s (%s).\n",
+		cp.Path, cp.Project, cp.Event, counts)
 	if failed && cp.ErrorMessage != "" {
 		fmt.Fprintf(&l, "Failure: %s (%s)\n", cp.ErrorMessage, cp.ErrorCode)
 	}
