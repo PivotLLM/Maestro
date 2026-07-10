@@ -2762,46 +2762,46 @@ fi
 # SECTION 17: Report Tools
 #===============================================================================
 
-print_section "SECTION 17: Report Tools" "Tools: report_start, report_append, report_end, report_list, report_read"
+print_section "SECTION 17: Report Tools" "Tools: report_write (start/append/end), report_get (list/read)"
 
 print_subsection "14.1 Report Session Management"
 
 run_test "14.1.1 Start report session" \
-    "report_start" \
-    "{\"project\":\"$TEST_PROJECT\",\"title\":\"Test Report\",\"intro\":\"This is a test report.\"}" \
+    "report_write" \
+    "{\"action\":\"start\",\"project\":\"$TEST_PROJECT\",\"title\":\"Test Report\",\"intro\":\"This is a test report.\"}" \
     '"main_report"'
 
 run_test "14.1.2 Verify main_report filename returned" \
-    "report_start" \
-    "{\"project\":\"$TEST_PROJECT\",\"title\":\"Second Report\",\"intro\":\"\"}" \
+    "report_write" \
+    "{\"action\":\"start\",\"project\":\"$TEST_PROJECT\",\"title\":\"Second Report\",\"intro\":\"\"}" \
     'Report.md'
 
 print_subsection "14.2 Report Append"
 
 run_test "14.2.1 Append to default report" \
-    "report_append" \
-    "{\"project\":\"$TEST_PROJECT\",\"content\":\"## Section 1\\n\\nThis is section 1 content.\\n\\n\"}" \
+    "report_write" \
+    "{\"action\":\"append\",\"project\":\"$TEST_PROJECT\",\"content\":\"## Section 1\\n\\nThis is section 1 content.\\n\\n\"}" \
     '"success":true'
 
 run_test "14.2.2 Append more content to default report" \
-    "report_append" \
-    "{\"project\":\"$TEST_PROJECT\",\"content\":\"## Section 2\\n\\nThis is section 2 content.\\n\\n\"}" \
+    "report_write" \
+    "{\"action\":\"append\",\"project\":\"$TEST_PROJECT\",\"content\":\"## Section 2\\n\\nThis is section 2 content.\\n\\n\"}" \
     '"bytes_written"'
 
 run_test "14.2.3 Append to named report" \
-    "report_append" \
-    "{\"project\":\"$TEST_PROJECT\",\"content\":\"# QA Report\\n\\nQA findings here.\\n\",\"report\":\"QA\"}" \
+    "report_write" \
+    "{\"action\":\"append\",\"project\":\"$TEST_PROJECT\",\"content\":\"# QA Report\\n\\nQA findings here.\\n\",\"report\":\"QA\"}" \
     '"report"'
 
 print_subsection "14.3 Report List"
 
 run_test "14.3.1 List reports" \
-    "report_list" \
+    "report_get" \
     "{\"project\":\"$TEST_PROJECT\"}" \
     '"count"'
 
 run_test "14.3.2 Verify reports in list" \
-    "report_list" \
+    "report_get" \
     "{\"project\":\"$TEST_PROJECT\"}" \
     'Report.md'
 
@@ -2809,7 +2809,7 @@ print_subsection "14.4 Report Read"
 
 # Get the actual report name for reading tests
 run_test_capture "14.4.1 Get report list for reading" \
-    "report_list" \
+    "report_get" \
     "{\"project\":\"$TEST_PROJECT\"}" \
     "reports"
 
@@ -2817,17 +2817,17 @@ run_test_capture "14.4.1 Get report list for reading" \
 REPORT_NAME=$(echo "$CAPTURED_RESULT" | grep -o '"name":"[^"]*Report\.md"' | head -1 | sed 's/"name":"//;s/"//')
 if [ -n "$REPORT_NAME" ]; then
     run_test "14.4.2 Read specific report by name" \
-        "report_read" \
+        "report_get" \
         "{\"project\":\"$TEST_PROJECT\",\"report\":\"$REPORT_NAME\"}" \
         '"content"'
 
     run_test "14.4.3 Verify report contains appended content" \
-        "report_read" \
+        "report_get" \
         "{\"project\":\"$TEST_PROJECT\",\"report\":\"$REPORT_NAME\"}" \
         'Section 1'
 
     run_test "14.4.4 Verify byte range reading works" \
-        "report_read" \
+        "report_get" \
         "{\"project\":\"$TEST_PROJECT\",\"report\":\"$REPORT_NAME\",\"max_bytes\":50}" \
         '"total_bytes"'
 else
@@ -2842,49 +2842,49 @@ fi
 print_subsection "14.5 Report End Session"
 
 run_test "14.5.1 End report session" \
-    "report_end" \
-    "{\"project\":\"$TEST_PROJECT\"}" \
+    "report_write" \
+    "{\"action\":\"end\",\"project\":\"$TEST_PROJECT\"}" \
     '"success":true'
 
 run_test_expect_fail "14.5.2 End session again fails (no active session)" \
-    "report_end" \
-    "{\"project\":\"$TEST_PROJECT\"}" \
+    "report_write" \
+    "{\"action\":\"end\",\"project\":\"$TEST_PROJECT\"}" \
     "no active report session"
 
 run_test "14.5.3 Reports still exist after session end" \
-    "report_list" \
+    "report_get" \
     "{\"project\":\"$TEST_PROJECT\"}" \
     'Report.md'
 
 print_subsection "14.6 Report Error Handling"
 
 run_test_expect_fail "14.6.1 Start report without project" \
-    "report_start" \
-    '{"title":"Test"}' \
+    "report_write" \
+    '{"action":"start","title":"Test"}' \
     "project parameter is required"
 
 run_test_expect_fail "14.6.2 Start report without title" \
-    "report_start" \
-    "{\"project\":\"$TEST_PROJECT\"}" \
+    "report_write" \
+    "{\"action\":\"start\",\"project\":\"$TEST_PROJECT\"}" \
     "title parameter is required"
 
 run_test_expect_fail "14.6.3 Append without content" \
-    "report_append" \
-    "{\"project\":\"$TEST_PROJECT\"}" \
+    "report_write" \
+    "{\"action\":\"append\",\"project\":\"$TEST_PROJECT\"}" \
     "content parameter is required"
 
 run_test_expect_fail "14.6.4 Read non-existent report" \
-    "report_read" \
+    "report_get" \
     "{\"project\":\"$TEST_PROJECT\",\"report\":\"nonexistent.md\"}" \
     "not found"
 
 run_test_expect_fail "14.6.5 Report name without .md extension" \
-    "report_read" \
+    "report_get" \
     "{\"project\":\"$TEST_PROJECT\",\"report\":\"invalid\"}" \
     "must end with .md"
 
 run_test_expect_fail "14.6.6 Report name with path traversal" \
-    "report_read" \
+    "report_get" \
     "{\"project\":\"$TEST_PROJECT\",\"report\":\"../../../etc/passwd.md\"}" \
     ""
 
@@ -2902,8 +2902,8 @@ run_test "14.7.2 Create task for report_create test" \
     '"title":"Test Task"'
 
 run_test "14.7.3 Start fresh report session for report_create" \
-    "report_start" \
-    "{\"project\":\"$TEST_PROJECT\",\"title\":\"Report Create Test\"}" \
+    "report_write" \
+    "{\"action\":\"start\",\"project\":\"$TEST_PROJECT\",\"title\":\"Report Create Test\"}" \
     '"prefix"'
 
 run_test "14.7.4 Generate report with report_create" \
@@ -2917,8 +2917,8 @@ run_test "14.7.5 Verify report_create returns report count" \
     '"reports_count"'
 
 run_test "14.7.6 End report session after report_create" \
-    "report_end" \
-    "{\"project\":\"$TEST_PROJECT\"}" \
+    "report_write" \
+    "{\"action\":\"end\",\"project\":\"$TEST_PROJECT\"}" \
     '"success":true'
 
 run_test_expect_fail "14.7.7 Report create without project fails" \

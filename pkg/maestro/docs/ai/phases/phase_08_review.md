@@ -117,7 +117,7 @@ file_append(
 ## Step-by-Step Checklist
 
 1. **Prepare for review session**
-   - Ensure reports are generated: `report_list(project="<project>")`
+   - Ensure reports are generated: `report_get(project="<project>")` (omit report to list)
    - List tasks to get UUIDs: `task_list(project="<project>", path="<taskset>")`
    - Identify which items need human review (typically all, for audits)
 
@@ -191,7 +191,7 @@ file_append(
      ```
    - Or start a new report session if you want a fresh report:
      ```
-     report_start(project="<project>", title="Reviewed Report")
+     report_write(action="start", project="<project>", title="Reviewed Report")
      ```
 
 9. **Finalize review**

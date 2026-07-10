@@ -111,11 +111,8 @@ const (
 	ToolFileExtract = "file_extract"
 
 	// MCP Tool Names - Reports (read-only domain with controlled write)
-	ToolReportList   = "report_list"
-	ToolReportRead   = "report_read"
-	ToolReportStart  = "report_start"
-	ToolReportAppend = "report_append"
-	ToolReportEnd    = "report_end"
+	ToolReportGet   = "report_get"
+	ToolReportWrite = "report_write"
 
 	// MCP Tool Names - System
 	ToolHealth    = "health"

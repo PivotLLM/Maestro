@@ -629,7 +629,7 @@ taskset_reset(
 - `"failed"`: Only resets tasks with status `failed`, leaving `done` tasks unchanged
 
 **When `end_report=true`:**
-- The response includes a reminder to call `report_start` before running tasks
+- The response includes a reminder to call `report_write` (action=start) before running tasks
 - Use this when you want to generate a fresh report with the re-run results
 
 ---
@@ -1457,9 +1457,9 @@ When a report file is first created, Maestro automatically adds:
 <Disclaimer template content>
 ```
 
-- **Title**: From `report_start` title parameter
-- **Issued date**: Captured when `report_start` is called (not when content is appended)
-- **Intro**: Optional introductory paragraph from `report_start`
+- **Title**: From `report_write` (action=start) title parameter
+- **Issued date**: Captured when `report_write` (action=start) is called (not when content is appended)
+- **Intro**: Optional introductory paragraph from `report_write` (action=start)
 - **Disclaimer**: Loaded from project's `disclaimer_template` field (mandatory)
 
 This ensures the issued date reflects when the report session began, not when the final content was written.
@@ -1545,16 +1545,14 @@ For projects requiring multiple report variants (e.g., client-facing and interna
 
 | Tool | Purpose |
 |------|---------|
-| `report_start` | Start a new report session with a prefix |
-| `report_append` | Append content to a report |
-| `report_end` | End the current report session |
-| `report_list` | List all reports in a project |
-| `report_read` | Read a specific report |
+| `report_write` | Manage a report session (action=start/append/end) |
+| `report_get` | List all reports in a project (omit report), or read a specific report |
 | `report_create` | Generate reports from task results (same as runner auto-report) |
 
 **Starting a Report Session**
 ```
-report_start(
+report_write(
+  action: "start",
   project: "my-project",
   title: "Security Audit",
   intro: "This report documents the audit findings."
@@ -1563,7 +1561,8 @@ report_start(
 
 **Appending to Reports**
 ```
-report_append(
+report_write(
+  action: "append",
   project: "my-project",
   content: "## Executive Summary\n\n..."
 )
@@ -1571,7 +1570,7 @@ report_append(
 
 **Listing Reports**
 ```
-report_list(project: "my-project")
+report_get(project: "my-project")
 ```
 
 **Generating Reports from Task Results**
@@ -2005,8 +2004,8 @@ This prevents partial writes and corruption.
 `list_item_add`, `list_item_get`, `list_item_update`, `list_item_rename`, `list_item_remove`, `list_item_search`
 `list_create_tasks`
 
-### Report Tools (6)
-`report_list`, `report_read`, `report_start`, `report_append`, `report_end`, `report_create`
+### Report Tools (3)
+`report_get`, `report_write`, `report_create`
 
 ### Supervisor Tools (1)
 `supervisor_update`

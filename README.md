@@ -150,14 +150,11 @@ Hierarchical task organization within projects.
 - `taskset_delete` - Delete a task set and all its tasks
 - `taskset_reset` - Reset tasks in a task set to waiting status
 
-### Report Tools (6)
+### Report Tools (3)
 Automated report generation from task results.
-- `report_start` - Start a report session for a project
-- `report_append` - Append content to a report
-- `report_end` - End the report session and clear the prefix
+- `report_write` - Manage a report session (action=start/append/end)
 - `report_create` - Generate reports from task results
-- `report_list` - List all reports in a project
-- `report_read` - Read a report from a project
+- `report_get` - List all reports in a project, or read one
 
 ### LLM Tools (3)
 Multi-LLM configuration and dispatch.

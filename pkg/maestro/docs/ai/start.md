@@ -532,11 +532,11 @@ QA tasks should:
 **Reports are auto-generated** when the runner completes task sets. Each task's results are rendered using configured templates and appended to the project's main report file.
 
 **Report Tools**:
-- `report_start(project, title, intro)`: Start a new report session with a prefix
-- `report_append(project, content)`: Manually append content to the report
-- `report_end(project)`: End the current report session
-- `report_list(project)`: List all reports in a project
-- `report_read(project, report)`: Read a specific report
+- `report_write(project, action="start", title, intro)`: Start a new report session with a prefix
+- `report_write(project, action="append", content)`: Manually append content to the report (append is the default action)
+- `report_write(project, action="end")`: End the current report session
+- `report_get(project)`: List all reports in a project (omit report)
+- `report_get(project, report)`: Read a specific report
 
 **Report Location**: `<project>/reports/<prefix>Report.md`
 
