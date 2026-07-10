@@ -93,7 +93,8 @@ list_item_update(
 Document process improvements discovered during review:
 
 ```
-project_file_append(
+file_append(
+  source="project",
   project="<project>",
   path="review/lessons-learned.md",
   content="## [Date] - Prompt Improvement\n\n**Finding:** AI consistently missed...\n**Recommendation:** Update prompt to include...\n\n"
@@ -106,14 +107,16 @@ When certain controls need special handling:
 
 ```
 # Add to project's guidance file
-project_file_append(
+file_append(
+  source="project",
   project="<project>",
   path="review/control-guidance.md",
   content="## [Control ID]\n\n**Assessment Tips:**\n- [Specific guidance]\n\n"
 )
 
 # Then transfer valuable guidance to playbook for future audits
-playbook_file_append(
+file_append(
+  source="playbook",
   playbook="it-audit",
   path="guidance/control-hints.md",
   content="## [Control ID]\n\n[Guidance content]\n\n"

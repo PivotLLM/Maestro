@@ -94,11 +94,11 @@ User-created collections of reusable procedures and knowledge.
 - `playbook_list`, `playbook_create`, `playbook_rename`, `playbook_delete`
 
 **Playbook Files (7):**
-- `playbook_file_list`, `playbook_file_get`, `playbook_file_put`
-- `playbook_file_append`, `playbook_file_edit`, `playbook_file_rename`, `playbook_file_delete`
+- `file_list`, `file_get`, `file_put` (source=playbook)
+- `file_append`, `file_edit`, `file_rename`, `file_delete` (source=playbook)
 
 **Playbook Search (1):**
-- `playbook_search` - Search playbook files by filename or content
+- `file_search` (source=playbook) - Search playbook files by filename or content
 
 ### Project Tools (18)
 Where active work happens with full project lifecycle support.
@@ -112,11 +112,11 @@ Where active work happens with full project lifecycle support.
 - `project_rename` - Rename a project or subproject
 
 **Project Files (9):**
-- `project_file_list`, `project_file_get`, `project_file_put`
-- `project_file_append`, `project_file_edit`, `project_file_rename`, `project_file_delete`
-- `project_file_convert` - Convert files (PDF, DOCX, XLSX) to Markdown
-- `project_file_extract` - Extract zip archives within project files
-- `project_file_search` - Search project files by filename or content
+- `file_list`, `file_get`, `file_put` (source=project)
+- `file_append`, `file_edit`, `file_rename`, `file_delete` (source=project)
+- `file_convert` - Convert files (PDF, DOCX, XLSX) to Markdown
+- `file_extract` - Extract zip archives within project files
+- `file_search` (source=project) - Search project files by filename or content
 
 **Project Logs (2):**
 - `project_log_append` - Add entry to project log
@@ -224,11 +224,11 @@ The `files/` directory is automatically created when a project is created. This 
 - Data files
 - Any other project-specific content
 
-The LLM can access these files using the `project_file_get` tool with the appropriate path relative to the `files/` directory.
+The LLM can access these files using the `file_get` (source=project) tool with the appropriate path relative to the `files/` directory.
 
 **Example**: If you place a file at `~/.maestro/projects/my-project/files/requirements.pdf`, the LLM can access it using:
 ```
-project_file_get(project="my-project", path="requirements.pdf")
+file_get(source="project", project="my-project", path="requirements.pdf")
 ```
 
 ### Importing External Files
@@ -241,7 +241,7 @@ file_import(source="/path/to/evidence", project="my-project", recursive=true)
 
 This imports files into `files/imported/` and preserves symlinks. Imported files are accessible via:
 ```
-project_file_get(project="my-project", path="imported/document.md")
+file_get(source="project", project="my-project", path="imported/document.md")
 ```
 
 ## Runner Workflow

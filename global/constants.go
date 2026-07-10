@@ -27,36 +27,18 @@ const (
 	ToolReferenceSearch = "reference_search"
 
 	// MCP Tool Names - Playbook
-	ToolPlaybookList       = "playbook_list"
-	ToolPlaybookCreate     = "playbook_create"
-	ToolPlaybookRename     = "playbook_rename"
-	ToolPlaybookDelete     = "playbook_delete"
-	ToolPlaybookFileList   = "playbook_file_list"
-	ToolPlaybookFileGet    = "playbook_file_get"
-	ToolPlaybookFilePut    = "playbook_file_put"
-	ToolPlaybookFileAppend = "playbook_file_append"
-	ToolPlaybookFileEdit   = "playbook_file_edit"
-	ToolPlaybookFileRename = "playbook_file_rename"
-	ToolPlaybookFileDelete = "playbook_file_delete"
-	ToolPlaybookSearch     = "playbook_search"
+	ToolPlaybookList   = "playbook_list"
+	ToolPlaybookCreate = "playbook_create"
+	ToolPlaybookRename = "playbook_rename"
+	ToolPlaybookDelete = "playbook_delete"
 
 	// MCP Tool Names - Project
-	ToolProjectCreate      = "project_create"
-	ToolProjectGet         = "project_get"
-	ToolProjectUpdate      = "project_update"
-	ToolProjectList        = "project_list"
-	ToolProjectRename      = "project_rename"
-	ToolProjectDelete      = "project_delete"
-	ToolProjectFileList    = "project_file_list"
-	ToolProjectFileGet     = "project_file_get"
-	ToolProjectFilePut     = "project_file_put"
-	ToolProjectFileAppend  = "project_file_append"
-	ToolProjectFileEdit    = "project_file_edit"
-	ToolProjectFileRename  = "project_file_rename"
-	ToolProjectFileDelete  = "project_file_delete"
-	ToolProjectFileSearch  = "project_file_search"
-	ToolProjectFileConvert = "project_file_convert"
-	ToolProjectFileExtract = "project_file_extract"
+	ToolProjectCreate = "project_create"
+	ToolProjectGet    = "project_get"
+	ToolProjectUpdate = "project_update"
+	ToolProjectList   = "project_list"
+	ToolProjectRename = "project_rename"
+	ToolProjectDelete = "project_delete"
 
 	// MCP Tool Names - Project Log
 	ToolProjectLogAppend = "project_log_append"
@@ -114,10 +96,19 @@ const (
 	// MCP Tool Names - List Task Creation
 	ToolListCreateTasks = "list_create_tasks"
 
-	// MCP Tool Names - File Operations (Cross-Domain)
-	ToolFileCopy   = "file_copy"
-	ToolFileDelete = "file_delete"
-	ToolFileImport = "file_import"
+	// MCP Tool Names - File Operations (Cross-Domain: project, playbook, reference)
+	ToolFileList    = "file_list"
+	ToolFileGet     = "file_get"
+	ToolFilePut     = "file_put"
+	ToolFileAppend  = "file_append"
+	ToolFileEdit    = "file_edit"
+	ToolFileRename  = "file_rename"
+	ToolFileSearch  = "file_search"
+	ToolFileCopy    = "file_copy"
+	ToolFileDelete  = "file_delete"
+	ToolFileImport  = "file_import"
+	ToolFileConvert = "file_convert"
+	ToolFileExtract = "file_extract"
 
 	// MCP Tool Names - Reports (read-only domain with controlled write)
 	ToolReportList   = "report_list"

@@ -46,7 +46,7 @@ Use this phase when:
    - If playbooks exist, review their names and descriptions.
    - Ask the user: "I found the following playbooks: [list]. Do any of these apply to the work you want to do?"
    - If the user indicates a playbook applies:
-     - Read the playbook's main document (e.g., `playbook_file_get(playbook="<name>", path="procedure.md")`).
+     - Read the playbook's main document (e.g., `file_get(source="playbook", playbook="<name>", path="procedure.md")`).
      - Follow the playbook's guidance for project structure, naming, and initial setup.
      - Reference the playbook throughout subsequent phases.
    - If no playbook applies or none exist:
@@ -55,7 +55,7 @@ Use this phase when:
        - Read `reference/authoring-playbooks.md` for guidance on playbook creation.
        - Work with the user to design the playbook.
        - Create the playbook using `playbook_create`.
-       - Create initial playbook files using `playbook_file_put`.
+       - Create initial playbook files using `file_put` (source=playbook).
        - Once the playbook is created, use it for this project.
      - If the user declines:
        - Proceed with general Maestro phases.
@@ -64,11 +64,11 @@ Use this phase when:
    - Identify the chosen project name.
    - Load project metadata with `project_get(name="<project>")`.
    - Check the project description/metadata for any playbook references.
-   - If a playbook was used, reload it: `playbook_file_get(playbook="<name>", path="procedure.md")`.
+   - If a playbook was used, reload it: `file_get(source="playbook", playbook="<name>", path="procedure.md")`.
    - Load the project's task sets with `taskset_list(project="<project>")`.
    - Review recent activity with `project_log_get(project="<project>")`.
    - Load any plan documents from project files:
-     - `project_file_get(project="<project>", path="plan.md")` (if it exists)
+     - `file_get(source="project", project="<project>", path="plan.md")` (if it exists)
    - Summarize the current state to the user and then transition to the next relevant phase.
 
 4. **If the user chooses to start a new project**
@@ -90,7 +90,7 @@ Use this phase when:
      - `description`: goal/objective + " [Using playbook: <playbook-name>]" if applicable
      - `disclaimer_template`: **REQUIRED** - either `"playbook-name/templates/disclaimer.md"` or `"none"`
    - If using a playbook, create any initial files recommended by the playbook.
-   - Optionally write additional notes to project files using `project_file_put`.
+   - Optionally write additional notes to project files using `file_put` (source=project).
 
 5. **Gather evidence and input files** (for audits, evaluations, assessments)
    - Ask the user about evidence or input documents:
@@ -110,12 +110,12 @@ Use this phase when:
        convert=true
      )
      ```
-   - **Extract zip archives** using `project_file_extract`:
+   - **Extract zip archives** using `file_extract`:
      - Evidence packages often come as zip files (e.g., Drata exports)
      - Extract in place: `archive.zip` → `archive/` folder
      - Use `convert=true` to convert extracted files to Markdown
      ```
-     project_file_extract(
+     file_extract(
        project="my-project",
        path="imported/evidence.zip",
        convert=true
@@ -125,17 +125,18 @@ Use this phase when:
      - **Always ask the user first**: "Would you like me to delete the original zip files now that they've been extracted?"
      - Only delete if the user confirms
      ```
-     project_file_delete(
+     file_delete(
+       source="project",
        project="my-project",
        path="imported/evidence.zip"
      )
      ```
-   - **Convert documents** using `project_file_convert`:
+   - **Convert documents** using `file_convert`:
      - Convert PDF, DOCX, XLSX files to Markdown for easier processing
      - Use `recursive=true` for directories
      - **Note**: Conversion is optimized for LLM consumption. Due to Markdown limitations, complex layouts and formatting may not be fully preserved.
      ```
-     project_file_convert(
+     file_convert(
        project="my-project",
        path="imported/documents",
        recursive=true
@@ -158,19 +159,19 @@ Use this phase when:
 
 - `project_list` – discover existing projects
 - `playbook_list` – discover available playbooks
-- `playbook_file_get` – read playbook documentation
+- `file_get` (source=playbook) – read playbook documentation
 - `playbook_create` – create a new playbook (if needed)
-- `playbook_file_put` – write playbook files (if creating a playbook)
+- `file_put` (source=playbook) – write playbook files (if creating a playbook)
 - `reference_get` – read authoring-playbooks.md guide (if creating a playbook)
 - `project_get` – load project metadata
 - `project_create` – create a new project
 - `project_log_get` – review project history
 - `taskset_list` – load project task sets
-- `project_file_get` – load project plan/notes
-- `project_file_put` – create additional project files
+- `file_get` (source=project) – load project plan/notes
+- `file_put` (source=project) – create additional project files
 - `file_import` – import external files into the project
-- `project_file_extract` – extract zip archives within the project
-- `project_file_convert` – convert PDF, DOCX, XLSX to Markdown
+- `file_extract` – extract zip archives within the project
+- `file_convert` – convert PDF, DOCX, XLSX to Markdown
 
 ## Expected Outputs
 

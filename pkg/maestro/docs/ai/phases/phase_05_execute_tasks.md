@@ -32,7 +32,7 @@ Use this phase when:
 
 1. **Review lists and plan**
    - Read the plan:
-     - `project_file_get(project="<project>", path="plan.md")`
+     - `file_get(source="project", project="<project>", path="plan.md")`
    - Check which lists require per-item processing:
      - `list_list(project="<project>")`
    - Review list contents:
@@ -180,7 +180,7 @@ Use this phase when:
 - `task_status` – check task status counts
 - `task_results` – retrieve task results
 - `task_list` – list tasks with details
-- `project_file_get` – read plan and source documents
+- `file_get` – read plan and source documents
 - `project_log_append` – record important notes
 
 ## Expected Outputs

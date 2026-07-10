@@ -123,7 +123,7 @@ Use this phase when:
      - Were there steps that could be generalized?
    - Extract any reusable patterns or templates.
    - Store them in playbooks for future use:
-     - `playbook_file_put(playbook="<playbook>", path="template.md", content="...")`
+     - `file_put(source="playbook", playbook="<playbook>", path="template.md", content="...")`
 
 ## Typical Tools Used
 
@@ -133,11 +133,11 @@ Use this phase when:
 - `report_read` – read a specific report
 - `report_append` – add custom content to reports
 - `list_get_summary` – verify list item counts
-- `project_file_get` – inspect plan and items as needed
+- `file_get` – inspect plan and items as needed
 - `llm_dispatch` – assist with drafting supplementary content
 - `project_update` – mark project as done
 - `project_log_append` – record final milestone
-- `playbook_file_put` – save reusable templates
+- `file_put` – save reusable templates
 
 ## Expected Outputs
 

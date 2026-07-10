@@ -37,7 +37,7 @@ Maestro organizes information into three fixed domains:
 - **Lists**: Structured item collections available in all three domains (`list_*`, `list_item_*`, `list_create_tasks`)
 - **Reports**: Auto-generated reports in project's `reports/` directory (`report_*` tools)
 
-Additional tools: `llm_list`, `llm_dispatch`, `llm_test`, `health`, `file_copy`, `file_import`, `project_file_extract`, `project_file_convert`
+Additional tools: `llm_list`, `llm_dispatch`, `llm_test`, `health`, `file_copy`, `file_import`, `file_extract`, `file_convert`
 
 ---
 
@@ -676,7 +676,7 @@ task_run(project="my-project", path="analysis")
 
 **Solution**: Verify the file path is correct:
 1. Check the playbook name and file path spelling
-2. Use `playbook_file_list` to see available files in the playbook
+2. Use `file_list` (source=playbook) to see available files in the playbook
 3. Ensure the file was created before referencing it
 
 **Example**:
@@ -685,7 +685,7 @@ task_run(project="my-project", path="analysis")
 task_create(..., instructions_file="my-playbook/prompts/worker.md", ...)
 
 # Correct - verify file exists first
-playbook_file_list(playbook="my-playbook")
+file_list(source="playbook", playbook="my-playbook")
 # Shows: instructions/assess_control.md
 
 task_create(..., instructions_file="my-playbook/instructions/assess_control.md", ...)

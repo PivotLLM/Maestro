@@ -24,7 +24,7 @@ Maestro has three fixed domains:
 Playbooks live in the **playbooks domain** and are stored as files under a configured `playbooks_dir` (e.g., `~/.maestro/playbooks/<playbook_name>/*`). You interact with them using tools like:
 
 - `playbook_list`, `playbook_create`, `playbook_delete`
-- `playbook_file_list`, `playbook_file_get`, `playbook_file_put`, `playbook_file_delete`
+- `file_list`, `file_get`, `file_put`, `file_delete` (with `source="playbook"`)
 
 Think of it this way:
 
@@ -155,7 +155,7 @@ For each phase, design domain-specific behavior:
 
 ### 3.4 Write the Playbook Document
 
-Use `playbook_file_put` to create or update the main playbook document. A typical structure:
+Use `file_put` (source="playbook") to create or update the main playbook document. A typical structure:
 
 ```
 # <Playbook Name> – Maestro Playbook
@@ -270,7 +270,7 @@ When using `instructions_file_source="playbook"`, the path **MUST** include the 
 Once a playbook exists, treat it as a **living document**:
 
 1. **Before starting a new project**
-   - Read the relevant playbook via `playbook_file_get`
+   - Read the relevant playbook via `file_get` (source="playbook")
    - Ask the user whether anything has changed
    - Propose updates if needed
 
@@ -546,16 +546,16 @@ Evidence can be stored in different locations:
 
 | Location | Use When | Access Pattern |
 |----------|----------|----------------|
-| **Project files** | Evidence specific to this project | `project_file_get(project="...", path="evidence/...")` |
-| **Imported files** | Evidence imported from external location | `project_file_get(project="...", path="imported/...")` |
-| **Playbook files** | Reference docs shared across projects | `playbook_file_get(playbook="...", path="docs/...")` |
+| **Project files** | Evidence specific to this project | `file_get(source="project", project="...", path="evidence/...")` |
+| **Imported files** | Evidence imported from external location | `file_get(source="project", project="...", path="imported/...")` |
+| **Playbook files** | Reference docs shared across projects | `file_get(source="playbook", playbook="...", path="docs/...")` |
 | **External paths** | Large files the user manages outside Maestro | User confirms path; worker accesses directly |
 
 ### 8.2.1 Importing Evidence with file_import
 
 The **recommended approach** for evidence is to import it into the project using `file_import`. This:
 - Creates a copy of evidence specific to this project
-- Allows workers to use standard `project_file_*` tools
+- Allows workers to use standard `file_*` tools (source="project")
 - Preserves symlinks (common in evidence archives)
 - Isolates the project from changes to original files
 
@@ -569,9 +569,9 @@ file_import(
 
 **Important notes:**
 - Files are imported to `<project>/files/imported/`
-- Workers access via `project_file_get(project="...", path="imported/...")`
+- Workers access via `file_get(source="project", project="...", path="imported/...")`
 - Symlinks are preserved (evidence archives often use symlinks for shared documents)
-- Evidence should be in readable formats (text, markdown) - use `project_file_convert` to convert PDF/DOCX/XLSX to Markdown
+- Evidence should be in readable formats (text, markdown) - use `file_convert` to convert PDF/DOCX/XLSX to Markdown
 - **Conversion note**: The x2md library is optimized for LLM consumption. Complex layouts and formatting may not be fully preserved in Markdown output.
 
 **Always ask the user**: "Do you have evidence files to import for this project? If so, please provide the path."
@@ -586,8 +586,8 @@ file_import(
 
 **Phase 02 (Requirements)**:
 1. **Verify** each evidence source is accessible before proceeding
-2. For project files: `project_file_list` to confirm files exist
-3. For playbook files: `playbook_file_list` to confirm files exist
+2. For project files: `file_list` (source="project") to confirm files exist
+3. For playbook files: `file_list` (source="playbook") to confirm files exist
 4. For external paths: Confirm with user that files are in place
 5. Update manifest with verification status
 6. **Do NOT create tasks until evidence is verified**
@@ -632,7 +632,8 @@ file_copy(
 )
 
 # 2. Edit the project copy to add evidence paths
-project_file_edit(
+file_edit(
+  source="project",
   project="my-audit",
   path="instructions/worker.md",
   old_string="## Evidence Location",
@@ -794,7 +795,7 @@ When asked to create or refine a playbook:
 1. **Read this guide** from the reference domain
 2. **Ask the user** about domain, documents, constraints, outputs
 3. **Design the playbook** following the structure above
-4. **Write it** using `playbook_file_put`
+4. **Write it** using `file_put` (source="playbook")
 5. **Reference it** from future project sessions
 
 Your goal is to turn user expertise + Maestro's orchestration model into **reusable, phase-aligned instructions** that make each new project easier, safer, and more thorough.
@@ -1898,7 +1899,7 @@ After playbook creation is complete:
 
 ```
 # Verify playbook is correct
-playbook_file_list(playbook="security-audit")
+file_list(source="playbook", playbook="security-audit")
 list_get_summary(list="controls", source="playbook", playbook="security-audit")
 
 # Delete temporary project

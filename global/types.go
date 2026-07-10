@@ -77,21 +77,21 @@ func (l Limits) WithDefaults() Limits {
 
 // TaskSet represents a collection of tasks at a specific path
 type TaskSet struct {
-	Path                   string    `json:"path"`
-	Title                  string    `json:"title"`
-	Description            string    `json:"description,omitempty"`
-	WorkerResponseTemplate string    `json:"worker_response_template,omitempty"`
-	WorkerReportTemplate   string    `json:"worker_report_template,omitempty"`
-	QAResponseTemplate     string    `json:"qa_response_template,omitempty"`
-	QAReportTemplate       string    `json:"qa_report_template,omitempty"`
-	Parallel               bool      `json:"parallel"`
-	Limits                 Limits    `json:"limits,omitempty"` // Execution limits for tasks in this set
-	SkipValidation         bool      `json:"skip_validation,omitempty"`
+	Path                   string     `json:"path"`
+	Title                  string     `json:"title"`
+	Description            string     `json:"description,omitempty"`
+	WorkerResponseTemplate string     `json:"worker_response_template,omitempty"`
+	WorkerReportTemplate   string     `json:"worker_report_template,omitempty"`
+	QAResponseTemplate     string     `json:"qa_response_template,omitempty"`
+	QAReportTemplate       string     `json:"qa_report_template,omitempty"`
+	Parallel               bool       `json:"parallel"`
+	Limits                 Limits     `json:"limits,omitempty"` // Execution limits for tasks in this set
+	SkipValidation         bool       `json:"skip_validation,omitempty"`
 	CallbackURL            string     `json:"callback_url,omitempty"`
 	CallbackedAt           *time.Time `json:"callbacked_at,omitempty"`
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
-	Tasks                  []Task    `json:"tasks"`
+	Tasks                  []Task     `json:"tasks"`
 }
 
 // Task represents a unit of work within a task set

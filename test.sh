@@ -498,7 +498,7 @@ run_test_expect_fail "1.4.7.3 Absolute path in user" \
 # SECTION 2: Playbook Tools
 #===============================================================================
 
-print_section "SECTION 2: Playbook Tools" "Tools: playbook_list, playbook_create, playbook_rename, playbook_delete, playbook_file_*, playbook_search"
+print_section "SECTION 2: Playbook Tools" "Tools: playbook_list, playbook_create, playbook_rename, playbook_delete, file_* (source=playbook)"
 
 print_subsection "2.1 Playbook CRUD Operations"
 run_test "2.1.1 List playbooks (initial)" \
@@ -538,184 +538,184 @@ run_test_expect_fail "2.1.7 Create playbook with slash in name" \
 
 print_subsection "2.2 Playbook File Operations"
 run_test "2.2.1 Create file in playbook" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"content\":\"# Test Procedure\\n\\nStep 1: Do something\\nStep 2: Do more\",\"summary\":\"Test procedure file\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"content\":\"# Test Procedure\\n\\nStep 1: Do something\\nStep 2: Do more\",\"summary\":\"Test procedure file\"}" \
     '"created":true'
 
 run_test "2.2.2 List files in playbook" \
-    "playbook_file_list" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\"}" \
+    "file_list" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\"}" \
     "procedure.md"
 
 run_test "2.2.3 Get file from playbook" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\"}" \
     "Test Procedure"
 
 run_test "2.2.4 Update file in playbook" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"content\":\"# Updated Procedure\\n\\nStep 1: New step\\nStep 2: Another step\",\"summary\":\"Updated procedure\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"content\":\"# Updated Procedure\\n\\nStep 1: New step\\nStep 2: Another step\",\"summary\":\"Updated procedure\"}" \
     '"created":false'
 
 run_test "2.2.5 Verify file update" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\"}" \
     "Updated Procedure"
 
 print_subsection "2.2.5a Playbook File Append"
 run_test "2.2.5a.1 Append to existing file" \
-    "playbook_file_append" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"content\":\"\\n\\n## Appended Section\\n\\nThis was appended to the file\"}" \
+    "file_append" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"content\":\"\\n\\n## Appended Section\\n\\nThis was appended to the file\"}" \
     '"success":true'
 
 run_test "2.2.5a.2 Verify append worked" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\"}" \
     "Appended Section"
 
 run_test "2.2.5a.3 Append to non-existent file (creates)" \
-    "playbook_file_append" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-append.md\",\"content\":\"# New File\\n\\nCreated via append\"}" \
+    "file_append" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-append.md\",\"content\":\"# New File\\n\\nCreated via append\"}" \
     '"success":true'
 
 run_test "2.2.5a.4 Verify new file created" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-append.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-append.md\"}" \
     "Created via append"
 
 run_test "2.2.5a.5 Append to new file again" \
-    "playbook_file_append" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-append.md\",\"content\":\"\\n\\nMore content appended\"}" \
+    "file_append" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-append.md\",\"content\":\"\\n\\nMore content appended\"}" \
     '"success":true'
 
 run_test "2.2.5a.6 Verify second append" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-append.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-append.md\"}" \
     "More content appended"
 
 print_subsection "2.2.5b Playbook File Edit"
 run_test "2.2.5b.1 Create file for edit testing" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"content\":\"Line 1: Hello World\\nLine 2: Foo Bar\\nLine 3: Hello World\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"content\":\"Line 1: Hello World\\nLine 2: Foo Bar\\nLine 3: Hello World\"}" \
     '"created":true'
 
 run_test "2.2.5b.2 Edit file - single replacement" \
-    "playbook_file_edit" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"Foo Bar\",\"new_string\":\"Replaced Text\"}" \
+    "file_edit" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"Foo Bar\",\"new_string\":\"Replaced Text\"}" \
     '"success":true'
 
 run_test "2.2.5b.3 Verify single replacement" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\"}" \
     "Replaced Text"
 
 run_test_expect_fail "2.2.5b.4 Edit fails when old_string appears multiple times without replace_all" \
-    "playbook_file_edit" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"Hello World\",\"new_string\":\"Goodbye\"}" \
+    "file_edit" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"Hello World\",\"new_string\":\"Goodbye\"}" \
     "multiple"
 
 run_test "2.2.5b.5 Edit with replace_all=true" \
-    "playbook_file_edit" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"Hello World\",\"new_string\":\"Goodbye\",\"replace_all\":true}" \
+    "file_edit" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"Hello World\",\"new_string\":\"Goodbye\",\"replace_all\":true}" \
     '"success":true'
 
 run_test "2.2.5b.6 Verify replace_all worked" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\"}" \
     "Goodbye"
 
 run_test_expect_fail "2.2.5b.7 Edit fails when old_string not found" \
-    "playbook_file_edit" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"NonExistentText\",\"new_string\":\"New\"}" \
+    "file_edit" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"NonExistentText\",\"new_string\":\"New\"}" \
     "not found"
 
 run_test "2.2.5b.8 Edit to delete text (empty new_string)" \
-    "playbook_file_edit" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"Line 2: Replaced Text\\n\",\"new_string\":\"\"}" \
+    "file_edit" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\",\"old_string\":\"Line 2: Replaced Text\\n\",\"new_string\":\"\"}" \
     '"success":true'
 
 run_test_expect_fail "2.2.5b.9 Edit non-existent file" \
-    "playbook_file_edit" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"nonexistent.md\",\"old_string\":\"foo\",\"new_string\":\"bar\"}" \
+    "file_edit" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"nonexistent.md\",\"old_string\":\"foo\",\"new_string\":\"bar\"}" \
     "not found"
 
 run_test "2.2.5b.10 Delete edit test file" \
-    "playbook_file_delete" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\"}" \
+    "file_delete" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"edit-test.md\"}" \
     '"deleted":true'
 
 print_subsection "2.2.6 Byte Range Reading"
 run_test "2.2.6.1 Byte range - first 10 bytes" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"max_bytes\":10}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"max_bytes\":10}" \
     "total_bytes"
 
 run_test "2.2.6.2 Byte range - with byte_offset" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"byte_offset\":5,\"max_bytes\":10}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"procedure.md\",\"byte_offset\":5,\"max_bytes\":10}" \
     "offset"
 
 run_test "2.2.7 Create nested file" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"templates/report.md\",\"content\":\"# Report Template\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"templates/report.md\",\"content\":\"# Report Template\"}" \
     '"created":true'
 
 run_test "2.2.8 List with prefix filter" \
-    "playbook_file_list" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"prefix\":\"templates\"}" \
+    "file_list" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"prefix\":\"templates\"}" \
     "report.md"
 
 print_subsection "2.3 Playbook File Rename"
 run_test "2.3.1 Create file for rename" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"old-name.md\",\"content\":\"Rename test content\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"old-name.md\",\"content\":\"Rename test content\"}" \
     '"created":true'
 
 run_test "2.3.2 Rename file" \
-    "playbook_file_rename" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"from_path\":\"old-name.md\",\"to_path\":\"new-name.md\"}" \
+    "file_rename" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"from_path\":\"old-name.md\",\"to_path\":\"new-name.md\"}" \
     '"renamed":true'
 
 run_test_expect_fail "2.3.3 Verify old name gone" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"old-name.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"old-name.md\"}" \
     "not found"
 
 run_test "2.3.4 Verify new name exists" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-name.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-name.md\"}" \
     "Rename test content"
 
 print_subsection "2.4 Playbook File Delete"
 run_test "2.4.1 Delete file from playbook" \
-    "playbook_file_delete" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-name.md\"}" \
+    "file_delete" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-name.md\"}" \
     '"deleted":true'
 
 run_test_expect_fail "2.4.2 Verify file deleted" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-name.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"new-name.md\"}" \
     "not found"
 
 print_subsection "2.5 Playbook Search"
 run_test "2.5.1 Create searchable file" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"searchable.md\",\"content\":\"This file contains UNIQUE_PLAYBOOK_TOKEN for testing\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"searchable.md\",\"content\":\"This file contains UNIQUE_PLAYBOOK_TOKEN for testing\"}" \
     '"created":true'
 
 run_test "2.5.2 Search across playbooks" \
-    "playbook_search" \
-    '{"query":"UNIQUE_PLAYBOOK_TOKEN"}' \
+    "file_search" \
+    '{"source":"playbook","query":"UNIQUE_PLAYBOOK_TOKEN"}' \
     "searchable.md"
 
 run_test "2.5.3 Search within specific playbook" \
-    "playbook_search" \
-    "{\"query\":\"UNIQUE_PLAYBOOK_TOKEN\",\"playbook\":\"$TEST_PLAYBOOK\"}" \
+    "file_search" \
+    "{\"source\":\"playbook\",\"query\":\"UNIQUE_PLAYBOOK_TOKEN\",\"playbook\":\"$TEST_PLAYBOOK\"}" \
     "searchable.md"
 
 run_test "2.5.4 Search with limit/offset" \
-    "playbook_search" \
-    '{"query":"procedure","limit":10,"offset":0}' \
+    "file_search" \
+    '{"source":"playbook","query":"procedure","limit":10,"offset":0}' \
     ""
 
 print_subsection "2.6 Playbook Rename"
@@ -725,13 +725,13 @@ run_test "2.6.1 Rename playbook" \
     '"renamed":true'
 
 run_test_expect_fail "2.6.2 Verify old playbook name gone" \
-    "playbook_file_list" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\"}" \
+    "file_list" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\"}" \
     "not found"
 
 run_test "2.6.3 Verify new playbook name exists" \
-    "playbook_file_list" \
-    "{\"playbook\":\"$TEST_PLAYBOOK-renamed\"}" \
+    "file_list" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK-renamed\"}" \
     "procedure.md"
 
 print_subsection "2.7 Playbook Delete"
@@ -741,8 +741,8 @@ run_test "2.7.1 Delete playbook" \
     '"deleted":true'
 
 run_test_expect_fail "2.7.2 Verify playbook deleted" \
-    "playbook_file_list" \
-    "{\"playbook\":\"$TEST_PLAYBOOK-renamed\"}" \
+    "file_list" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK-renamed\"}" \
     "not found"
 
 run_test "2.7.3 Delete second playbook" \
@@ -752,8 +752,8 @@ run_test "2.7.3 Delete second playbook" \
 
 print_subsection "2.8 Playbook Security"
 run_test_expect_fail "2.8.1 Path traversal attempt" \
-    "playbook_file_get" \
-    '{"playbook":"test","path":"../../../etc/passwd"}' \
+    "file_get" \
+    '{"source":"playbook","playbook":"test","path":"../../../etc/passwd"}' \
     ""
 
 #===============================================================================
@@ -895,237 +895,237 @@ run_test_expect_fail "3.5.2 Verify project deleted" \
 # SECTION 4: Project File Tools
 #===============================================================================
 
-print_section "SECTION 4: Project File Operations" "Tools: project_file_list, project_file_get, project_file_put, project_file_rename, project_file_delete, project_file_search"
+print_section "SECTION 4: Project File Operations" "Tools: file_list, file_get, file_put, file_rename, file_delete, file_search, file_convert, file_extract (source=project)"
 
 print_subsection "4.1 Create Files"
 run_test "4.1.1 Create file in project" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"content\":\"# Requirements\\n\\n1. First requirement\\n2. Second requirement\",\"summary\":\"Project requirements\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"content\":\"# Requirements\\n\\n1. First requirement\\n2. Second requirement\",\"summary\":\"Project requirements\"}" \
     '"created":true'
 
 run_test "4.1.2 Create second file" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"design.md\",\"content\":\"# Design Document\\n\\nArchitecture overview\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"design.md\",\"content\":\"# Design Document\\n\\nArchitecture overview\"}" \
     '"created":true'
 
 run_test "4.1.3 Create nested file" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"docs/api.md\",\"content\":\"# API Documentation\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"docs/api.md\",\"content\":\"# API Documentation\"}" \
     '"created":true'
 
 run_test "4.1.4 Create index file (JSON)" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"index.json\",\"content\":\"{\\\"items\\\":[{\\\"id\\\":\\\"REQ-001\\\",\\\"title\\\":\\\"Auth Required\\\"}]}\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"index.json\",\"content\":\"{\\\"items\\\":[{\\\"id\\\":\\\"REQ-001\\\",\\\"title\\\":\\\"Auth Required\\\"}]}\"}" \
     '"created":true'
 
 print_subsection "4.2 List Files"
 run_test "4.2.1 List all files" \
-    "project_file_list" \
-    "{\"project\":\"$TEST_PROJECT\"}" \
+    "file_list" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\"}" \
     "requirements.md"
 
 run_test "4.2.2 List with prefix filter" \
-    "project_file_list" \
-    "{\"project\":\"$TEST_PROJECT\",\"prefix\":\"docs\"}" \
+    "file_list" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"prefix\":\"docs\"}" \
     "api.md"
 
 print_subsection "4.3 Get Files"
 run_test "4.3.1 Get requirements file" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
     "Requirements"
 
 run_test "4.3.2 Get nested file" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"docs/api.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"docs/api.md\"}" \
     "API Documentation"
 
 run_test "4.3.3 Get index file" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"index.json\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"index.json\"}" \
     "REQ-001"
 
 run_test_expect_fail "4.3.4 Get non-existent file" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"nonexistent.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"nonexistent.md\"}" \
     "not found"
 
 print_subsection "4.3.5 Byte Range Reading"
 run_test "4.3.5.1 Get first 10 bytes" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"max_bytes\":10}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"max_bytes\":10}" \
     "total_bytes"
 
 run_test "4.3.5.2 Get bytes with byte_offset" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"byte_offset\":5,\"max_bytes\":10}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"byte_offset\":5,\"max_bytes\":10}" \
     "offset"
 
 run_test "4.3.5.3 Full file (no byte range)" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
     "content"
 
 print_subsection "4.4 Update Files"
 run_test "4.4.1 Update requirements file" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"content\":\"# Updated Requirements\\n\\n1. New requirement\\n2. Another requirement\\n3. Third requirement\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"content\":\"# Updated Requirements\\n\\n1. New requirement\\n2. Another requirement\\n3. Third requirement\"}" \
     '"created":false'
 
 run_test "4.4.2 Verify update persisted" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
     "Updated Requirements"
 
 print_subsection "4.4a Append to Files"
 run_test "4.4a.1 Append to existing file" \
-    "project_file_append" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"content\":\"\\n\\n## Additional Requirements\\n\\n4. Fourth requirement\\n5. Fifth requirement\"}" \
+    "file_append" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\",\"content\":\"\\n\\n## Additional Requirements\\n\\n4. Fourth requirement\\n5. Fifth requirement\"}" \
     '"success":true'
 
 run_test "4.4a.2 Verify append worked" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
     "Additional Requirements"
 
 run_test "4.4a.3 Verify original content still present" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"requirements.md\"}" \
     "Updated Requirements"
 
 run_test "4.4a.4 Append to non-existent file (creates)" \
-    "project_file_append" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"append-test.md\",\"content\":\"# Test File\\n\\nCreated via append operation\"}" \
+    "file_append" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"append-test.md\",\"content\":\"# Test File\\n\\nCreated via append operation\"}" \
     '"success":true'
 
 run_test "4.4a.5 Verify new file created via append" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"append-test.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"append-test.md\"}" \
     "Created via append"
 
 run_test "4.4a.6 Append to created file" \
-    "project_file_append" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"append-test.md\",\"content\":\"\\n\\n## Second Section\\n\\nMore appended content\"}" \
+    "file_append" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"append-test.md\",\"content\":\"\\n\\n## Second Section\\n\\nMore appended content\"}" \
     '"success":true'
 
 run_test "4.4a.7 Verify both sections present" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"append-test.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"append-test.md\"}" \
     "Second Section"
 
 run_test_expect_fail "4.4a.8 Append to non-existent project" \
-    "project_file_append" \
+    "file_append" \
     '{"project":"nonexistent","path":"test.md","content":"test"}' \
     "not found"
 
 print_subsection "4.4b Project File Edit"
 run_test "4.4b.1 Create file for edit testing" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"content\":\"Line 1: Hello World\\nLine 2: Foo Bar\\nLine 3: Hello World\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"content\":\"Line 1: Hello World\\nLine 2: Foo Bar\\nLine 3: Hello World\"}" \
     '"created":true'
 
 run_test "4.4b.2 Edit file - single replacement" \
-    "project_file_edit" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"Foo Bar\",\"new_string\":\"Replaced Text\"}" \
+    "file_edit" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"Foo Bar\",\"new_string\":\"Replaced Text\"}" \
     '"success":true'
 
 run_test "4.4b.3 Verify single replacement" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\"}" \
     "Replaced Text"
 
 run_test_expect_fail "4.4b.4 Edit fails when old_string appears multiple times without replace_all" \
-    "project_file_edit" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"Hello World\",\"new_string\":\"Goodbye\"}" \
+    "file_edit" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"Hello World\",\"new_string\":\"Goodbye\"}" \
     "multiple"
 
 run_test "4.4b.5 Edit with replace_all=true" \
-    "project_file_edit" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"Hello World\",\"new_string\":\"Goodbye\",\"replace_all\":true}" \
+    "file_edit" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"Hello World\",\"new_string\":\"Goodbye\",\"replace_all\":true}" \
     '"success":true'
 
 run_test "4.4b.6 Verify replace_all worked" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\"}" \
     "Goodbye"
 
 run_test_expect_fail "4.4b.7 Edit fails when old_string not found" \
-    "project_file_edit" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"NonExistentText\",\"new_string\":\"New\"}" \
+    "file_edit" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"NonExistentText\",\"new_string\":\"New\"}" \
     "not found"
 
 run_test "4.4b.8 Edit to delete text (empty new_string)" \
-    "project_file_edit" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"Line 2: Replaced Text\\n\",\"new_string\":\"\"}" \
+    "file_edit" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\",\"old_string\":\"Line 2: Replaced Text\\n\",\"new_string\":\"\"}" \
     '"success":true'
 
 run_test_expect_fail "4.4b.9 Edit non-existent file" \
-    "project_file_edit" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"nonexistent.md\",\"old_string\":\"foo\",\"new_string\":\"bar\"}" \
+    "file_edit" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"nonexistent.md\",\"old_string\":\"foo\",\"new_string\":\"bar\"}" \
     "not found"
 
 run_test "4.4b.10 Delete edit test file" \
-    "project_file_delete" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\"}" \
+    "file_delete" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"edit-test.md\"}" \
     '"deleted":true'
 
 print_subsection "4.5 Rename Files"
 run_test "4.5.1 Create file for rename" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"old-file.md\",\"content\":\"Content to rename\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"old-file.md\",\"content\":\"Content to rename\"}" \
     '"created":true'
 
 run_test "4.5.2 Rename file" \
-    "project_file_rename" \
-    "{\"project\":\"$TEST_PROJECT\",\"from_path\":\"old-file.md\",\"to_path\":\"renamed-file.md\"}" \
+    "file_rename" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"from_path\":\"old-file.md\",\"to_path\":\"renamed-file.md\"}" \
     '"renamed":true'
 
 run_test_expect_fail "4.5.3 Verify old name gone" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"old-file.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"old-file.md\"}" \
     "not found"
 
 run_test "4.5.4 Verify new name exists" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"renamed-file.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"renamed-file.md\"}" \
     "Content to rename"
 
 print_subsection "4.6 Delete Files"
 run_test "4.6.1 Delete renamed file" \
-    "project_file_delete" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"renamed-file.md\"}" \
+    "file_delete" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"renamed-file.md\"}" \
     '"deleted":true'
 
 run_test_expect_fail "4.6.2 Verify file deleted" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"renamed-file.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"renamed-file.md\"}" \
     "not found"
 
 print_subsection "4.7 Search Files"
 run_test "4.7.1 Create searchable file" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"searchable.md\",\"content\":\"This file has PROJECT_SEARCH_TOKEN for testing\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"searchable.md\",\"content\":\"This file has PROJECT_SEARCH_TOKEN for testing\"}" \
     '"created":true'
 
 run_test "4.7.2 Search within project" \
-    "project_file_search" \
-    "{\"query\":\"PROJECT_SEARCH_TOKEN\",\"project\":\"$TEST_PROJECT\"}" \
+    "file_search" \
+    "{\"source\":\"project\",\"query\":\"PROJECT_SEARCH_TOKEN\",\"project\":\"$TEST_PROJECT\"}" \
     "searchable.md"
 
 run_test "4.7.3 Search all projects" \
-    "project_file_search" \
+    "file_search" \
     '{"query":"Requirements"}' \
     ""
 
 run_test "4.7.4 Search with limit" \
-    "project_file_search" \
-    "{\"query\":\"test\",\"project\":\"$TEST_PROJECT\",\"limit\":5}" \
+    "file_search" \
+    "{\"source\":\"project\",\"query\":\"test\",\"project\":\"$TEST_PROJECT\",\"limit\":5}" \
     ""
 
 print_subsection "4.8 File Security"
 run_test_expect_fail "4.8.1 Path traversal attempt" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"../../../etc/passwd\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"../../../etc/passwd\"}" \
     ""
 
 print_subsection "4.9 File Import, Extract, and Convert"
@@ -1142,13 +1142,13 @@ run_test "4.9.1 Import directory into project" \
     '"files_imported":'
 
 run_test "4.9.2 Verify imported file exists" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"imported/import-test/test-doc.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"imported/import-test/test-doc.md\"}" \
     "Test Document"
 
 run_test "4.9.3 List imported files" \
-    "project_file_list" \
-    "{\"project\":\"$TEST_PROJECT\",\"prefix\":\"imported\"}" \
+    "file_list" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"prefix\":\"imported\"}" \
     "test-doc.md"
 
 # Create a test zip file
@@ -1165,24 +1165,24 @@ run_test "4.9.4 Import zip file" \
     '"files_imported":1'
 
 run_test "4.9.5 Extract zip file" \
-    "project_file_extract" \
+    "file_extract" \
     "{\"project\":\"$TEST_PROJECT\",\"path\":\"imported/zip-test.zip\"}" \
     '"files_extracted":'
 
 run_test "4.9.6 Verify extracted file exists" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"imported/zip-test/zip-test/zip-doc.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"imported/zip-test/zip-test/zip-doc.md\"}" \
     "Zipped Document"
 
-run_test "4.9.7 Verify archive still exists (use project_file_delete to remove)" \
-    "project_file_list" \
-    "{\"project\":\"$TEST_PROJECT\",\"prefix\":\"imported\"}" \
+run_test "4.9.7 Verify archive still exists (use file_delete to remove)" \
+    "file_list" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"prefix\":\"imported\"}" \
     "zip-test.zip"
 
 # Test overwrite=false (default)
 run_test "4.9.8 Create file that will conflict" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"test-extract/conflict.txt\",\"content\":\"Original content\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"test-extract/conflict.txt\",\"content\":\"Original content\"}" \
     '"created":true'
 
 # Create another zip with same file structure
@@ -1197,17 +1197,17 @@ run_test "4.9.9 Import test zip" \
 
 # Extract with overwrite=false should skip the conflicting file
 run_test "4.9.10 Extract with overwrite=false skips existing files" \
-    "project_file_extract" \
+    "file_extract" \
     "{\"project\":\"$TEST_PROJECT\",\"path\":\"imported/test-extract2.zip\",\"overwrite\":false}" \
     '"files_skipped":'
 
 run_test_expect_fail "4.9.11 Extract non-zip file fails" \
-    "project_file_extract" \
+    "file_extract" \
     "{\"project\":\"$TEST_PROJECT\",\"path\":\"imported/import-test/test-doc.md\"}" \
     "not a zip"
 
 run_test_expect_fail "4.9.12 Extract non-existent file fails" \
-    "project_file_extract" \
+    "file_extract" \
     "{\"project\":\"$TEST_PROJECT\",\"path\":\"nonexistent.zip\"}" \
     "not found"
 
@@ -1228,13 +1228,13 @@ run_test "4.10.1 Import directory with escaping symlinks" \
     '"files_imported":'
 
 run_test "4.10.2 Verify safe file was imported" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"imported/symlink-test/safe-file.txt\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"imported/symlink-test/safe-file.txt\"}" \
     "Safe content"
 
 run_test_expect_fail "4.10.3 Verify escaping symlink was removed" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"imported/symlink-test/escape-link\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"imported/symlink-test/escape-link\"}" \
     "not found"
 
 # Clean up test directories
@@ -1318,13 +1318,13 @@ run_test "6.0.1 Re-create test playbook" \
     "\"playbook\":\"$TEST_PLAYBOOK\""
 
 run_test "6.0.2 Create worker response template" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"templates/worker-response.json\",\"content\":\"{\\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": true}\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"templates/worker-response.json\",\"content\":\"{\\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": true}\"}" \
     '"path":"templates/worker-response.json"'
 
 run_test "6.0.3 Create worker report template" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"templates/worker-report.md\",\"content\":\"## Worker Report\\n\\n{{.WorkResult}}\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"templates/worker-report.md\",\"content\":\"## Worker Report\\n\\n{{.WorkResult}}\"}" \
     '"path":"templates/worker-report.md"'
 
 print_subsection "6.1 Create Task Set"
@@ -1444,8 +1444,8 @@ print_subsection "6.4.5 Instructions File Validation"
 
 # Create a test file in the project for validation tests
 run_test "6.4.5.0a Create project file for validation tests" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"test-instructions.md\",\"content\":\"Test instructions content\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"test-instructions.md\",\"content\":\"Test instructions content\"}" \
     '"created":true'
 
 # Test validation for task_create with invalid instructions file (project source)
@@ -1704,8 +1704,8 @@ print_subsection "9.2 Cross-Domain File Operations"
 # Setup: Ensure playbook exists for cross-domain copy tests
 cleanup_silent "playbook_create" "{\"name\":\"$TEST_PLAYBOOK\"}"
 run_test "9.2.0 Create playbook file for testing" \
-    "playbook_file_put" \
-    "{\"playbook\": \"$TEST_PLAYBOOK\", \"path\": \"procedure.md\", \"content\": \"# Test Procedure\\n\\nThis is a test procedure file for copy operations.\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\": \"$TEST_PLAYBOOK\", \"path\": \"procedure.md\", \"content\": \"# Test Procedure\\n\\nThis is a test procedure file for copy operations.\"}" \
     '"created":true'
 
 run_test "9.2.1 Copy file from reference to project" \
@@ -1714,8 +1714,8 @@ run_test "9.2.1 Copy file from reference to project" \
     '"copied":true'
 
 run_test "9.2.2 Verify copied file exists in project" \
-    "project_file_get" \
-    "{\"project\": \"$TEST_PROJECT\", \"path\": \"ref-copy.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\": \"$TEST_PROJECT\", \"path\": \"ref-copy.md\"}" \
     '"path":"ref-copy.md"'
 
 run_test "9.2.3 Copy file from project to playbook" \
@@ -1724,8 +1724,8 @@ run_test "9.2.3 Copy file from project to playbook" \
     '"copied":true'
 
 run_test "9.2.4 Verify copied file exists in playbook" \
-    "playbook_file_get" \
-    "{\"playbook\": \"$TEST_PLAYBOOK\", \"path\": \"copied-requirements.md\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\": \"$TEST_PLAYBOOK\", \"path\": \"copied-requirements.md\"}" \
     '"path":"copied-requirements.md"'
 
 run_test "9.2.5 Copy file from playbook to project" \
@@ -1734,8 +1734,8 @@ run_test "9.2.5 Copy file from playbook to project" \
     '"copied":true'
 
 run_test "9.2.6 Verify copied file exists in project" \
-    "project_file_get" \
-    "{\"project\": \"$TEST_PROJECT\", \"path\": \"imported-procedure.md\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\": \"$TEST_PROJECT\", \"path\": \"imported-procedure.md\"}" \
     '"content"'
 
 run_test "9.2.7 Copy within project (file duplication)" \
@@ -1781,7 +1781,7 @@ run_test_expect_fail "10.1.3 Delete non-existent project" \
     "not found"
 
 run_test_expect_fail "10.1.4 Get file from non-existent project" \
-    "project_file_get" \
+    "file_get" \
     '{"project":"nonexistent","path":"test.md"}' \
     "not found"
 
@@ -1803,13 +1803,13 @@ run_test_expect_fail "10.2.3 Project name with special chars" \
 
 print_subsection "10.3 Security"
 run_test_expect_fail "10.3.1 Path traversal in project files" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"../../etc/passwd\",\"content\":\"test\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"../../etc/passwd\",\"content\":\"test\"}" \
     ""
 
 run_test_expect_fail "10.3.2 Path traversal in playbook files" \
-    "playbook_file_put" \
-    '{"playbook":"test","path":"../../etc/passwd","content":"test"}' \
+    "file_put" \
+    '{"source":"playbook","playbook":"test","path":"../../etc/passwd","content":"test"}' \
     ""
 
 # NOTE: Subproject tests (formerly Section 11) have been removed.
@@ -2228,52 +2228,52 @@ print_subsection "12.1 Project File Chroot Tests"
 # These tests attempt to escape the chroot via various path traversal methods
 
 run_test_expect_fail "12.1.1 Path traversal via ../etc/passwd in project file" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"../../../etc/passwd\",\"content\":\"hacked\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"../../../etc/passwd\",\"content\":\"hacked\"}" \
     ""
 
 run_test_expect_fail "12.1.2 Path traversal via absolute path in project file" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"/etc/passwd\",\"content\":\"hacked\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"/etc/passwd\",\"content\":\"hacked\"}" \
     ""
 
 # Note: URL-encoded paths are not decoded by the server (that's the client's job)
 # So ..%2F..%2F becomes a literal filename, which is safe
 run_test "12.1.3 URL-encoded path creates literal filename (safe)" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"..%2F..%2F..%2Fetc%2Fpasswd\",\"content\":\"hacked\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"..%2F..%2F..%2Fetc%2Fpasswd\",\"content\":\"hacked\"}" \
     '"created":true'
 
 run_test_expect_fail "12.1.4 Path traversal via double dot in project file get" \
-    "project_file_get" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"../../etc/passwd\"}" \
+    "file_get" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"../../etc/passwd\"}" \
     ""
 
 run_test_expect_fail "12.1.5 Path traversal via nested ../ in project file" \
-    "project_file_put" \
-    "{\"project\":\"$TEST_PROJECT\",\"path\":\"subdir/../../../../../../etc/passwd\",\"content\":\"hacked\"}" \
+    "file_put" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\",\"path\":\"subdir/../../../../../../etc/passwd\",\"content\":\"hacked\"}" \
     ""
 
 print_subsection "12.2 Playbook File Chroot Tests"
 
 run_test_expect_fail "12.2.1 Path traversal via ../etc/passwd in playbook file" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"../../../etc/passwd\",\"content\":\"hacked\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"../../../etc/passwd\",\"content\":\"hacked\"}" \
     ""
 
 run_test_expect_fail "12.2.2 Path traversal via absolute path in playbook file" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"/etc/passwd\",\"content\":\"hacked\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"/etc/passwd\",\"content\":\"hacked\"}" \
     ""
 
 run_test_expect_fail "12.2.3 Path traversal via double dot in playbook file get" \
-    "playbook_file_get" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"../../etc/passwd\"}" \
+    "file_get" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"../../etc/passwd\"}" \
     ""
 
 run_test_expect_fail "12.2.4 Path traversal via nested ../ in playbook file" \
-    "playbook_file_put" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"templates/../../../../../../etc/passwd\",\"content\":\"hacked\"}" \
+    "file_put" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\",\"path\":\"templates/../../../../../../etc/passwd\",\"content\":\"hacked\"}" \
     ""
 
 print_subsection "12.3 Reference File Chroot Tests"
@@ -3014,8 +3014,8 @@ run_test_expect_fail "18.2.2 Verify project deleted" \
     "not found"
 
 run_test_expect_fail "18.2.3 Verify project files gone" \
-    "project_file_list" \
-    "{\"project\":\"$TEST_PROJECT\"}" \
+    "file_list" \
+    "{\"source\":\"project\",\"project\":\"$TEST_PROJECT\"}" \
     "not found"
 
 run_test_expect_fail "18.2.4 Verify project tasks gone" \
@@ -3035,8 +3035,8 @@ run_test "18.3.1 Delete test playbook" \
     '"deleted":true'
 
 run_test_expect_fail "18.3.2 Verify playbook deleted" \
-    "playbook_file_list" \
-    "{\"playbook\":\"$TEST_PLAYBOOK\"}" \
+    "file_list" \
+    "{\"source\":\"playbook\",\"playbook\":\"$TEST_PLAYBOOK\"}" \
     "not found"
 
 #===============================================================================

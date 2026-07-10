@@ -139,6 +139,296 @@ func (p *Provider) handleFileCopy(call *toolspec.ToolCall) (*toolspec.Result, er
 	return createJSONResult(result)
 }
 
+// fileOwner resolves the file operation's domain (source) and its owner name
+// (a project or playbook name; empty for reference). writable rejects the
+// read-only reference domain. requireName enforces an owner name for the
+// project/playbook domains (list and mutating ops); search allows it to be
+// empty to mean "search all".
+func fileOwner(args map[string]any, writable, requireName bool) (source, name string, err error) {
+	source = parseString(args, "source", "project")
+	switch source {
+	case "project":
+		name = parseString(args, "project", "")
+		if requireName && name == "" {
+			return "", "", fmt.Errorf("project parameter is required when source is 'project'")
+		}
+	case "playbook":
+		name = parseString(args, "playbook", "")
+		if requireName && name == "" {
+			return "", "", fmt.Errorf("playbook parameter is required when source is 'playbook'")
+		}
+	case "reference":
+		if writable {
+			return "", "", fmt.Errorf("source 'reference' is read-only")
+		}
+	default:
+		if writable {
+			return "", "", fmt.Errorf("source must be 'project' or 'playbook'")
+		}
+		return "", "", fmt.Errorf("source must be 'project', 'playbook', or 'reference'")
+	}
+	return source, name, nil
+}
+
+// handleFileList lists files in a project, playbook, or reference domain.
+func (p *Provider) handleFileList(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	source, name, err := fileOwner(call.Args, false, true)
+	if err != nil {
+		return nil, err
+	}
+	prefix := parseString(call.Args, "prefix", "")
+
+	p.logToolCall(global.ToolFileList, map[string]string{"source": source, "name": name})
+
+	result := map[string]interface{}{"source": source}
+	if name != "" {
+		result[source] = name
+	}
+
+	switch source {
+	case "project":
+		items, e := p.projects.ListFiles(name, prefix)
+		if e != nil {
+			return &toolspec.Result{ForLLM: e.Error(), IsError: true}, nil
+		}
+		result["files"] = items
+		result["count"] = len(items)
+	case "playbook":
+		items, e := p.playbooks.ListFiles(name, prefix)
+		if e != nil {
+			return &toolspec.Result{ForLLM: e.Error(), IsError: true}, nil
+		}
+		result["files"] = items
+		result["count"] = len(items)
+	case "reference":
+		items, e := p.reference.List(prefix)
+		if e != nil {
+			return &toolspec.Result{ForLLM: e.Error(), IsError: true}, nil
+		}
+		result["files"] = items
+		result["count"] = len(items)
+	}
+
+	return createJSONResult(result)
+}
+
+// handleFileGet reads a file from a project, playbook, or reference domain.
+func (p *Provider) handleFileGet(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	source, name, err := fileOwner(call.Args, false, true)
+	if err != nil {
+		return nil, err
+	}
+	path := parseString(call.Args, "path", "")
+	if path == "" {
+		return nil, fmt.Errorf("%s", "path parameter is required")
+	}
+	byteOffset := int64(parseFloat64(call.Args, "byte_offset", 0))
+	maxBytes := int64(parseFloat64(call.Args, "max_bytes", 0))
+
+	p.logToolCall(global.ToolFileGet, map[string]string{"source": source, "name": name, "path": path})
+
+	var item interface{}
+	switch source {
+	case "project":
+		item, err = p.projects.GetFile(name, path, byteOffset, maxBytes)
+	case "playbook":
+		item, err = p.playbooks.GetFile(name, path, byteOffset, maxBytes)
+	case "reference":
+		item, err = p.reference.Get(path, byteOffset, maxBytes)
+	}
+	if err != nil {
+		return &toolspec.Result{ForLLM: err.Error(), IsError: true}, nil
+	}
+
+	return createJSONResult(item)
+}
+
+// handleFilePut creates or updates a file in a project or playbook.
+func (p *Provider) handleFilePut(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	source, name, err := fileOwner(call.Args, true, true)
+	if err != nil {
+		return nil, err
+	}
+	path := parseString(call.Args, "path", "")
+	content := parseString(call.Args, "content", "")
+	summary := parseString(call.Args, "summary", "")
+
+	p.logToolCall(global.ToolFilePut, map[string]string{"source": source, "name": name, "path": path})
+
+	if path == "" {
+		return nil, fmt.Errorf("%s", "path parameter is required")
+	}
+	if content == "" {
+		return nil, fmt.Errorf("%s", "content parameter is required")
+	}
+
+	var created bool
+	switch source {
+	case "project":
+		created, err = p.projects.PutFile(name, path, content, summary)
+	case "playbook":
+		created, err = p.playbooks.PutFile(name, path, content, summary)
+	}
+	if err != nil {
+		return &toolspec.Result{ForLLM: err.Error(), IsError: true}, nil
+	}
+
+	result := map[string]interface{}{"source": source, source: name, "path": path, "created": created}
+	return createJSONResult(result)
+}
+
+// handleFileAppend appends content to a file in a project or playbook.
+func (p *Provider) handleFileAppend(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	source, name, err := fileOwner(call.Args, true, true)
+	if err != nil {
+		return nil, err
+	}
+	path := parseString(call.Args, "path", "")
+	content := parseString(call.Args, "content", "")
+	summary := parseString(call.Args, "summary", "")
+
+	p.logToolCall(global.ToolFileAppend, map[string]string{"source": source, "name": name, "path": path})
+
+	if path == "" {
+		return nil, fmt.Errorf("%s", "path parameter is required")
+	}
+	if content == "" {
+		return nil, fmt.Errorf("%s", "content parameter is required")
+	}
+
+	switch source {
+	case "project":
+		err = p.projects.AppendFile(name, path, content, summary)
+	case "playbook":
+		err = p.playbooks.AppendFile(name, path, content, summary)
+	}
+	if err != nil {
+		return &toolspec.Result{ForLLM: err.Error(), IsError: true}, nil
+	}
+
+	result := map[string]interface{}{"source": source, source: name, "path": path, "success": true}
+	return createJSONResult(result)
+}
+
+// handleFileEdit edits a file in a project or playbook using search-and-replace.
+func (p *Provider) handleFileEdit(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	source, name, err := fileOwner(call.Args, true, true)
+	if err != nil {
+		return nil, err
+	}
+	path := parseString(call.Args, "path", "")
+	oldString := parseString(call.Args, "old_string", "")
+	newString := parseString(call.Args, "new_string", "")
+	replaceAll := parseBool(call.Args, "replace_all", false)
+
+	p.logToolCall(global.ToolFileEdit, map[string]string{"source": source, "name": name, "path": path})
+
+	if path == "" {
+		return nil, fmt.Errorf("%s", "path parameter is required")
+	}
+	if oldString == "" {
+		return nil, fmt.Errorf("%s", "old_string parameter is required")
+	}
+	// new_string can be empty to delete the old_string
+
+	switch source {
+	case "project":
+		err = p.projects.EditFile(name, path, oldString, newString, replaceAll)
+	case "playbook":
+		err = p.playbooks.EditFile(name, path, oldString, newString, replaceAll)
+	}
+	if err != nil {
+		return &toolspec.Result{ForLLM: err.Error(), IsError: true}, nil
+	}
+
+	result := map[string]interface{}{"source": source, source: name, "path": path, "success": true}
+	return createJSONResult(result)
+}
+
+// handleFileRename renames or moves a file within a project or playbook.
+func (p *Provider) handleFileRename(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	source, name, err := fileOwner(call.Args, true, true)
+	if err != nil {
+		return nil, err
+	}
+	fromPath := parseString(call.Args, "from_path", "")
+	toPath := parseString(call.Args, "to_path", "")
+
+	p.logToolCall(global.ToolFileRename, map[string]string{"source": source, "name": name, "from": fromPath, "to": toPath})
+
+	if fromPath == "" {
+		return nil, fmt.Errorf("%s", "from_path parameter is required")
+	}
+	if toPath == "" {
+		return nil, fmt.Errorf("%s", "to_path parameter is required")
+	}
+
+	switch source {
+	case "project":
+		err = p.projects.RenameFile(name, fromPath, toPath)
+	case "playbook":
+		err = p.playbooks.RenameFile(name, fromPath, toPath)
+	}
+	if err != nil {
+		return &toolspec.Result{ForLLM: err.Error(), IsError: true}, nil
+	}
+
+	result := map[string]interface{}{"source": source, source: name, "from": fromPath, "to": toPath, "renamed": true}
+	return createJSONResult(result)
+}
+
+// handleFileSearch searches files by filename or content in a project,
+// playbook, or reference domain. An empty owner name searches all.
+func (p *Provider) handleFileSearch(call *toolspec.ToolCall) (*toolspec.Result, error) {
+	source, name, err := fileOwner(call.Args, false, false)
+	if err != nil {
+		return nil, err
+	}
+	query := parseString(call.Args, "query", "")
+	limit := int(parseFloat64(call.Args, "limit", 0))
+	offset := int(parseFloat64(call.Args, "offset", 0))
+
+	p.logToolCall(global.ToolFileSearch, map[string]string{"source": source, "name": name, "query": query})
+
+	if query == "" {
+		return nil, fmt.Errorf("%s", "query parameter is required")
+	}
+
+	result := map[string]interface{}{"source": source}
+	if name != "" {
+		result[source] = name
+	}
+
+	switch source {
+	case "project":
+		items, total, e := p.projects.SearchFiles(name, query, limit, offset)
+		if e != nil {
+			return &toolspec.Result{ForLLM: e.Error(), IsError: true}, nil
+		}
+		result["items"] = items
+		result["total"] = total
+		result["count"] = len(items)
+	case "playbook":
+		items, total, e := p.playbooks.Search(name, query, limit, offset)
+		if e != nil {
+			return &toolspec.Result{ForLLM: e.Error(), IsError: true}, nil
+		}
+		result["items"] = items
+		result["total"] = total
+		result["count"] = len(items)
+	case "reference":
+		items, total, e := p.reference.Search(query, limit, offset)
+		if e != nil {
+			return &toolspec.Result{ForLLM: e.Error(), IsError: true}, nil
+		}
+		result["items"] = items
+		result["total"] = total
+		result["count"] = len(items)
+	}
+
+	return createJSONResult(result)
+}
+
 // ImportAndConvertResult combines import and optional conversion results
 type ImportAndConvertResult struct {
 	Project       string `json:"project"`

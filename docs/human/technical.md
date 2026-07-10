@@ -409,14 +409,14 @@ Playbooks are user-created collections of reusable knowledge and procedures.
 | `playbook_create` | Create a new playbook |
 | `playbook_rename` | Rename a playbook |
 | `playbook_delete` | Delete a playbook and all files |
-| `playbook_file_list` | List files in a playbook |
-| `playbook_file_get` | Read a file from a playbook |
-| `playbook_file_put` | Create or update a file |
-| `playbook_file_append` | Append content to a file |
-| `playbook_file_edit` | Edit a file using find/replace |
-| `playbook_file_rename` | Rename a file |
-| `playbook_file_delete` | Delete a file |
-| `playbook_search` | Search playbook files by content |
+| `file_list` | List files in a playbook (source="playbook") |
+| `file_get` | Read a file from a playbook (source="playbook") |
+| `file_put` | Create or update a file (source="playbook") |
+| `file_append` | Append content to a file (source="playbook") |
+| `file_edit` | Edit a file using find/replace (source="playbook") |
+| `file_rename` | Rename a file (source="playbook") |
+| `file_delete` | Delete a file (source="playbook") |
+| `file_search` | Search playbook files by content (source="playbook") |
 
 ---
 
@@ -542,16 +542,16 @@ The history provides a complete audit trail of every LLM interaction, including 
 | `project_list` | List all projects |
 | `project_rename` | Rename a project |
 | `project_delete` | Delete project and all contents |
-| `project_file_list` | List files in a project |
-| `project_file_get` | Read a file from a project |
-| `project_file_put` | Create or update a file |
-| `project_file_append` | Append content to a file |
-| `project_file_edit` | Edit a file using find/replace |
-| `project_file_rename` | Rename a file |
-| `project_file_delete` | Delete a file |
-| `project_file_search` | Search project files by content |
-| `project_file_convert` | Convert PDF, DOCX, XLSX to Markdown |
-| `project_file_extract` | Extract zip archives within project files |
+| `file_list` | List files in a project (source="project") |
+| `file_get` | Read a file from a project (source="project") |
+| `file_put` | Create or update a file (source="project") |
+| `file_append` | Append content to a file (source="project") |
+| `file_edit` | Edit a file using find/replace (source="project") |
+| `file_rename` | Rename a file (source="project") |
+| `file_delete` | Delete a file (source="project") |
+| `file_search` | Search project files by content (source="project") |
+| `file_convert` | Convert PDF, DOCX, XLSX to Markdown |
+| `file_extract` | Extract zip archives within project files |
 | `project_log_append` | Add entry to project log |
 | `project_log_get` | Retrieve log entries |
 
@@ -1844,7 +1844,7 @@ Returns:
 
 **Security**: Symlinks that point outside the imported folder are automatically removed. This prevents path traversal attacks through symbolic links.
 
-### project_file_extract
+### file_extract
 
 Extract zip archives within a project's files directory.
 
@@ -1866,14 +1866,14 @@ Returns:
   convert_failed: int - Conversion failures
 ```
 
-Use `project_file_delete` to remove the archive after extraction if desired.
+Use `file_delete` to remove the archive after extraction if desired.
 
 **Extraction behavior**:
 - Archives are extracted in place: `foo.zip` → `foo/` in the same directory
 - Path traversal attacks in zip entries (e.g., `../etc/passwd`) are blocked
 - Symlinks in extracted content that escape the project are removed
 
-### project_file_convert
+### file_convert
 
 Convert document files to Markdown format.
 
@@ -1986,11 +1986,11 @@ This prevents partial writes and corruption.
 
 ### Playbook Tools (12)
 `playbook_list`, `playbook_create`, `playbook_rename`, `playbook_delete`
-`playbook_file_list`, `playbook_file_get`, `playbook_file_put`, `playbook_file_append`, `playbook_file_edit`, `playbook_file_rename`, `playbook_file_delete`, `playbook_search`
+`file_list`, `file_get`, `file_put`, `file_append`, `file_edit`, `file_rename`, `file_delete`, `file_search` (source="playbook")
 
 ### Project Tools (18)
 `project_create`, `project_get`, `project_update`, `project_list`, `project_rename`, `project_delete`
-`project_file_list`, `project_file_get`, `project_file_put`, `project_file_append`, `project_file_edit`, `project_file_rename`, `project_file_delete`, `project_file_search`, `project_file_convert`, `project_file_extract`
+`file_list`, `file_get`, `file_put`, `file_append`, `file_edit`, `file_rename`, `file_delete`, `file_search` (source="project"), `file_convert`, `file_extract`
 `project_log_append`, `project_log_get`
 
 ### Task Set Tools (6)
