@@ -376,9 +376,9 @@ Reference files are embedded in the executable at compile time using Go's embed 
 
 | Tool | Purpose |
 |------|---------|
-| `reference_list` | List all reference files (embedded + external) |
-| `reference_get` | Read a reference file by path |
-| `reference_search` | Search reference files by content |
+| `file_list` (source=reference) | List all reference files (embedded + external) |
+| `file_get` (source=reference) | Read a reference file by path |
+| `file_search` (source=reference) | Search reference files by content |
 
 External reference files appear with their configured mount prefix in paths (e.g., `user/file.md`, `standards/NIST.md`).
 
@@ -1981,7 +1981,7 @@ This prevents partial writes and corruption.
 ## 19. MCP Tool Summary
 
 ### Reference Tools (3) - Read-Only
-`reference_list`, `reference_get`, `reference_search`
+`file_list`, `file_get`, `file_search` (source=reference)
 
 ### Playbook Tools (12)
 `playbook_list`, `playbook_create`, `playbook_rename`, `playbook_delete`

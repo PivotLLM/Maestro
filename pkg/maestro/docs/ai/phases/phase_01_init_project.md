@@ -162,7 +162,7 @@ Use this phase when:
 - `file_get` (source=playbook) – read playbook documentation
 - `playbook_create` – create a new playbook (if needed)
 - `file_put` (source=playbook) – write playbook files (if creating a playbook)
-- `reference_get` – read authoring-playbooks.md guide (if creating a playbook)
+- `file_get` (source=reference) – read authoring-playbooks.md guide (if creating a playbook)
 - `project_get` – load project metadata
 - `project_create` – create a new project
 - `project_log_get` – review project history

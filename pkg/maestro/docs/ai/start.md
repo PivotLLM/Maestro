@@ -29,7 +29,7 @@ Maestro organizes information into three fixed domains:
 
 | Domain | Purpose | Tools |
 |--------|---------|-------|
-| **Reference** | Built-in documentation (read-only, embedded) | `reference_list`, `reference_get`, `reference_search` |
+| **Reference** | Built-in documentation (read-only, embedded) | `file_list`, `file_get`, `file_search` (source=reference) |
 | **Playbooks** | User-created reusable procedures and knowledge | `playbook_*` tools |
 | **Projects** | Active work with task sets, files, and logs | `project_*`, `taskset_*` (incl. `taskset_reset`), `task_*` tools |
 
@@ -56,7 +56,7 @@ Every Maestro project follows eight phases. **Read the phase-specific document**
 | 7 | `phases/phase_07_verify_and_report.md` | Verify completeness and generate report |
 | 8 | `phases/phase_08_review.md` | Facilitated human review and improvement |
 
-Use `reference_get` to read each phase document when needed.
+Use `file_get` (source=reference) to read each phase document when needed.
 
 ---
 

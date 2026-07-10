@@ -2059,4 +2059,4 @@ For a complete example of playbook structure including all phases, templates, an
 
 - `playbook-examples/it-audit-playbook.md` - IT audit playbook with review phase
 
-Use `reference_get(path="playbook-examples/it-audit-playbook.md")` to read the example.
+Use `file_get(source="reference", path="playbook-examples/it-audit-playbook.md")` to read the example.

@@ -66,7 +66,7 @@ Tests that directories are created properly on first run:
 
 ### Section 1: Reference Tools (Read-Only, Embedded)
 
-**Tools tested:** `reference_list`, `reference_get`, `reference_search`
+**Tools tested:** `file_list`, `file_get`, `file_search` (source=reference)
 
 **Coverage:**
 - List all reference files

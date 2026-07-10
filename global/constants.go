@@ -21,11 +21,6 @@ const (
 	CategoryPlaybooks = "playbooks"
 	CategoryProjects  = "projects"
 
-	// MCP Tool Names - Reference (read-only, embedded)
-	ToolReferenceList   = "reference_list"
-	ToolReferenceGet    = "reference_get"
-	ToolReferenceSearch = "reference_search"
-
 	// MCP Tool Names - Playbook
 	ToolPlaybookList   = "playbook_list"
 	ToolPlaybookCreate = "playbook_create"

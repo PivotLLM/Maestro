@@ -381,117 +381,117 @@ echo "Cleanup complete"
 # SECTION 1: Reference Tools (Read-Only, Embedded)
 #===============================================================================
 
-print_section "SECTION 1: Reference Tools" "Tools: reference_list, reference_get, reference_search"
+print_section "SECTION 1: Reference Tools" "Tools: file_list, file_get, file_search (source=reference)"
 
 print_subsection "1.1 List Reference Files"
 run_test "1.1.1 List all reference files" \
-    "reference_list" \
-    '{}' \
-    "items"
+    "file_list" \
+    '{"source":"reference"}' \
+    "files"
 
 run_test "1.1.2 List with prefix filter" \
-    "reference_list" \
-    '{"prefix":"tech"}' \
+    "file_list" \
+    '{"source":"reference","prefix":"tech"}' \
     ""
 
 print_subsection "1.2 Get Reference Files"
 run_test "1.2.1 Get start.md" \
-    "reference_get" \
-    '{"path":"start.md"}' \
+    "file_get" \
+    '{"source":"reference","path":"start.md"}' \
     "Maestro"
 
 run_test "1.2.2 Get phase document" \
-    "reference_get" \
-    '{"path":"phases/phase_01_init_project.md"}' \
+    "file_get" \
+    '{"source":"reference","path":"phases/phase_01_init_project.md"}' \
     "Initiation"
 
 run_test "1.2.3 Get config-example.json" \
-    "reference_get" \
-    '{"path":"config-example.json"}' \
+    "file_get" \
+    '{"source":"reference","path":"config-example.json"}' \
     "version"
 
 run_test_expect_fail "1.2.4 Get non-existent reference file" \
-    "reference_get" \
-    '{"path":"nonexistent.md"}' \
+    "file_get" \
+    '{"source":"reference","path":"nonexistent.md"}' \
     "not found"
 
 print_subsection "1.2.5 Byte Range Reading"
 run_test "1.2.5.1 Get first 10 bytes of start.md" \
-    "reference_get" \
-    '{"path":"start.md","max_bytes":10}' \
+    "file_get" \
+    '{"source":"reference","path":"start.md","max_bytes":10}' \
     "total_bytes"
 
 run_test "1.2.5.2 Get bytes with offset" \
-    "reference_get" \
-    '{"path":"start.md","byte_offset":5,"max_bytes":10}' \
+    "file_get" \
+    '{"source":"reference","path":"start.md","byte_offset":5,"max_bytes":10}' \
     "offset"
 
 run_test "1.2.5.3 Full file (no byte range)" \
-    "reference_get" \
-    '{"path":"start.md"}' \
+    "file_get" \
+    '{"source":"reference","path":"start.md"}' \
     "content"
 
 print_subsection "1.3 Search Reference"
 run_test "1.3.1 Search for 'project'" \
-    "reference_search" \
-    '{"query":"project"}' \
+    "file_search" \
+    '{"source":"reference","query":"project"}' \
     "items"
 
 run_test "1.3.2 Search with limit" \
-    "reference_search" \
-    '{"query":"task","limit":5}' \
+    "file_search" \
+    '{"source":"reference","query":"task","limit":5}' \
     ""
 
 run_test "1.3.3 Search for rare term" \
-    "reference_search" \
-    '{"query":"playbook"}' \
+    "file_search" \
+    '{"source":"reference","query":"playbook"}' \
     ""
 
 print_subsection "1.4 User-Provided Reference Files"
 run_test "1.4.1 List reference - check for user prefix support" \
-    "reference_list" \
-    '{"prefix":"user"}' \
+    "file_list" \
+    '{"source":"reference","prefix":"user"}' \
     ""
 
 run_test "1.4.2 List all reference files (embedded + user if configured)" \
-    "reference_list" \
-    '{}' \
-    "items"
+    "file_list" \
+    '{"source":"reference"}' \
+    "files"
 
 run_test "1.4.3 Search across all reference (embedded + user)" \
-    "reference_search" \
-    '{"query":"reference"}' \
+    "file_search" \
+    '{"source":"reference","query":"reference"}' \
     ""
 
 run_test_expect_fail "1.4.4 Get non-existent user file (graceful error)" \
-    "reference_get" \
-    '{"path":"user/test.txt"}' \
+    "file_get" \
+    '{"source":"reference","path":"user/test.txt"}' \
     "not found"
 
 run_test "1.4.5 Search with user prefix filter" \
-    "reference_list" \
-    '{"prefix":"user/"}' \
+    "file_list" \
+    '{"source":"reference","prefix":"user/"}' \
     ""
 
 run_test_expect_fail "1.4.6 Byte range on non-existent user file (graceful error)" \
-    "reference_get" \
-    '{"path":"user/example.txt","max_bytes":100}' \
+    "file_get" \
+    '{"source":"reference","path":"user/example.txt","max_bytes":100}' \
     "not found"
 
 print_subsection "1.4.7 User-Provided Security"
 run_test_expect_fail "1.4.7.1 Path traversal in user path" \
-    "reference_get" \
-    '{"path":"user/../../../etc/passwd"}' \
+    "file_get" \
+    '{"source":"reference","path":"user/../../../etc/passwd"}' \
     ""
 
 run_test_expect_fail "1.4.7.2 Path traversal attempt via parent directory" \
-    "reference_get" \
-    '{"path":"user/../../sensitive.txt"}' \
+    "file_get" \
+    '{"source":"reference","path":"user/../../sensitive.txt"}' \
     ""
 
 run_test_expect_fail "1.4.7.3 Absolute path in user" \
-    "reference_get" \
-    '{"path":"user//etc/passwd"}' \
+    "file_get" \
+    '{"source":"reference","path":"user//etc/passwd"}' \
     ""
 
 #===============================================================================
@@ -2279,18 +2279,18 @@ run_test_expect_fail "12.2.4 Path traversal via nested ../ in playbook file" \
 print_subsection "12.3 Reference File Chroot Tests"
 
 run_test_expect_fail "12.3.1 Path traversal via ../ in reference get" \
-    "reference_get" \
-    '{"path":"../../../etc/passwd"}' \
+    "file_get" \
+    '{"source":"reference","path":"../../../etc/passwd"}' \
     ""
 
 run_test_expect_fail "12.3.2 Path traversal via absolute path in reference get" \
-    "reference_get" \
-    '{"path":"/etc/passwd"}' \
+    "file_get" \
+    '{"source":"reference","path":"/etc/passwd"}' \
     ""
 
 run_test_expect_fail "12.3.3 Path traversal via nested ../ in reference get" \
-    "reference_get" \
-    '{"path":"phases/../../../../../../etc/passwd"}' \
+    "file_get" \
+    '{"source":"reference","path":"phases/../../../../../../etc/passwd"}' \
     ""
 
 print_subsection "12.4 List Chroot Tests"

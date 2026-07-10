@@ -81,9 +81,9 @@ Cross-domain file operations.
 
 ### Reference Tools (3) - Read-Only
 Built-in documentation embedded in the executable, plus optional user-provided files.
-- `reference_list` - List reference files (embedded + user-provided under `user/` prefix)
-- `reference_get` - Read a reference file
-- `reference_search` - Search reference documentation
+- `file_list` (source=reference) - List reference files (embedded + user-provided under `user/` prefix)
+- `file_get` (source=reference) - Read a reference file
+- `file_search` (source=reference) - Search reference documentation
 
 **Note**: External files appear under their configured mount prefix (e.g., `user/ISO-27001.pdf`, `standards/NIST.md`). If no `reference_dirs` are configured, only embedded files are available.
 

@@ -164,7 +164,7 @@ Before using Maestro with an AI assistant, you need to configure at least one LL
 
 ### Editing the Configuration
 
-Open `~/.maestro/config.json` in any text editor. A complete example with all supported LLMs is available in `docs/ai/config-example.json` in the repository (also accessible via `reference_get` with path `config-example.json`). The structure looks like this:
+Open `~/.maestro/config.json` in any text editor. A complete example with all supported LLMs is available in `docs/ai/config-example.json` in the repository (also accessible via `file_get` with source `reference` and path `config-example.json`). The structure looks like this:
 
 ```json
 {

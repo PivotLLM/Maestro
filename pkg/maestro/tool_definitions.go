@@ -15,37 +15,6 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 			Hints:       &toolspec.ToolHints{ReadOnly: toolspec.Allow(true)},
 		},
 		{
-			Name:        global.ToolReferenceList,
-			Description: "List all files in the built-in reference documentation. **Start by reading 'start.md' for orchestration guidance.** The reference section contains guidance on how to use Maestro effectively.",
-			Parameters: []toolspec.Parameter{
-				{Name: "prefix", Type: "string", Description: "Optional path prefix filter", Required: false},
-			},
-			Handler: p.handleReferenceList,
-			Hints:   &toolspec.ToolHints{ReadOnly: toolspec.Allow(true)},
-		},
-		{
-			Name:        global.ToolReferenceGet,
-			Description: "Read a file from the built-in reference documentation. **New to Maestro? Read 'start.md' first for complete orchestration guidance.** Note: To copy a reference file to a project or playbook, use file_copy instead of get+put - it's more efficient and doesn't load content into the conversation.",
-			Parameters: []toolspec.Parameter{
-				{Name: "path", Type: "string", Description: "Path to the reference file. Start with 'start.md' for orchestration guidance, then explore phase-specific docs in 'phases/'", Required: false},
-				{Name: "byte_offset", Type: "number", Description: "Byte position to start reading from, for chunked reading of large files (default: 0)", Required: false},
-				{Name: "max_bytes", Type: "number", Description: "Maximum bytes to return in this chunk, for chunked reading of large files (default: 0 = entire file)", Required: false},
-			},
-			Handler: p.handleReferenceGet,
-			Hints:   &toolspec.ToolHints{ReadOnly: toolspec.Allow(true)},
-		},
-		{
-			Name:        global.ToolReferenceSearch,
-			Description: "Search reference documentation by filename or content.",
-			Parameters: []toolspec.Parameter{
-				{Name: "query", Type: "string", Description: "Search query string", Required: false},
-				{Name: "limit", Type: "number", Description: "Maximum number of results", Required: false},
-				{Name: "offset", Type: "number", Description: "Number of results to skip", Required: false},
-			},
-			Handler: p.handleReferenceSearch,
-			Hints:   &toolspec.ToolHints{ReadOnly: toolspec.Allow(true)},
-		},
-		{
 			Name:        global.ToolPlaybookList,
 			Description: "List all playbooks. Playbooks are user-created collections of reusable knowledge and procedures.",
 			Parameters:  []toolspec.Parameter{},
@@ -215,7 +184,7 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 		},
 		{
 			Name:        global.ToolFileGet,
-			Description: "Read a file from a project, playbook, or reference domain. Note: to copy a file, use file_copy instead of get+put - it's more efficient and doesn't load content into the conversation.",
+			Description: "Read a file from a project, playbook, or reference domain. The reference domain (source=\"reference\") holds Maestro's built-in guidance - new to Maestro? Call start_here (or read 'start.md'), then explore 'phases/'. Note: to copy a file, use file_copy instead of get+put - it's more efficient and doesn't load content into the conversation.",
 			Parameters: []toolspec.Parameter{
 				{Name: "source", Type: "string", Description: "Domain: 'project' (default), 'playbook', or 'reference'", Required: false},
 				{Name: "project", Type: "string", Description: "Project name (required when source is 'project')", Required: false},
