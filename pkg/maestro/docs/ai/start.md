@@ -27,17 +27,21 @@ Think of yourself as a **project manager and senior analyst**. You should:
 
 Maestro organizes information into three fixed domains:
 
-| Domain | Purpose | Tools |
+| Domain | Purpose | Structure/management tools |
 |--------|---------|-------|
-| **Reference** | Built-in documentation (read-only, embedded) | `file_list`, `file_get`, `file_search` (source=reference) |
-| **Playbooks** | User-created reusable procedures and knowledge | `playbook_*` tools |
-| **Projects** | Active work with task sets, files, and logs | `project_*`, `taskset_*` (incl. `taskset_reset`), `task_*` tools |
+| **Reference** | Built-in documentation (read-only, embedded) | *(read-only; use the `file_*` tools below)* |
+| **Playbooks** | User-created reusable procedures and knowledge | `playbook_*` (create/rename/delete/list the playbook itself) |
+| **Projects** | Active work with task sets, files, and logs | `project_*` (project + logs), `taskset_*` (incl. `taskset_reset`), `task_*` |
 
-**Cross-Domain Features**:
+**Cross-Domain Features** (one tool family, pick the domain with `source`):
+- **Files**: The `file_*` tools operate on **any** domain via a `source` parameter — always pass `source` (`project`, `playbook`, or `reference`) plus the matching `project`/`playbook` name.
+  - Read (all three domains, incl. `reference`): `file_list`, `file_get`, `file_search`
+  - Write (`project`/`playbook` only — `reference` is read-only): `file_put`, `file_append`, `file_edit`, `file_rename`, `file_delete`
+  - Also: `file_copy` (within/between domains), `file_import`, `file_convert`, `file_extract` (project only)
 - **Lists**: Structured item collections available in all three domains (`list_*`, `list_item_*`, `list_create_tasks`)
-- **Reports**: Auto-generated reports in project's `reports/` directory (`report_*` tools)
+- **Reports**: Project report session + generation (`report_get`, `report_write`, `report_create`), written to the project's `reports/` directory
 
-Additional tools: `llm_list`, `llm_dispatch`, `llm_test`, `health`, `file_copy`, `file_import`, `file_extract`, `file_convert`
+Additional tools: `llm_list`, `llm_dispatch`, `llm_test`, `health`
 
 ---
 

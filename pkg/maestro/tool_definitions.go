@@ -297,7 +297,7 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 		},
 		{
 			Name:        global.ToolFileImport,
-			Description: "Import external files into a project's files/imported/ directory. This bypasses the normal chroot restrictions to allow importing files from anywhere on the filesystem. Imported files can then be accessed via project_file_* tools.",
+			Description: "Import external files into a project's files/imported/ directory. This bypasses the normal chroot restrictions to allow importing files from anywhere on the filesystem. Imported files can then be accessed via the file_* tools with source=\"project\".",
 			Parameters: []toolspec.Parameter{
 				{Name: "source", Type: "string", Description: "Source file or directory path (absolute path on the filesystem)", Required: false},
 				{Name: "project", Type: "string", Description: "Target project name to import files into", Required: false},

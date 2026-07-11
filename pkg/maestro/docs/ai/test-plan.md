@@ -596,16 +596,18 @@ This document provides a step-by-step test plan for validating Maestro's MCP too
 ### Test 9.1: List Reference Files
 
 **Steps:**
-1. Call `mcp__Maestro__reference_list` with no parameters
+1. Call `mcp__Maestro__file_list` with:
+   - `source`: `"reference"`
 
 **Expected Results:**
-- Response contains `"items"` array
+- Response contains `"files"` array
 - Array includes files like "readme.md"
 
 ### Test 9.2: Get Reference File
 
 **Steps:**
-1. Call `mcp__Maestro__reference_get` with:
+1. Call `mcp__Maestro__file_get` with:
+   - `source`: `"reference"`
    - `path`: `"readme.md"`
 
 **Expected Results:**
