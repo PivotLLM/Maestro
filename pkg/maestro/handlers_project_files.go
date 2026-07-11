@@ -20,246 +20,13 @@ import (
 	"github.com/PivotLLM/Maestro/global"
 )
 
-// Project file handlers
-
-func (p *Provider) handleProjectFileList(call *toolspec.ToolCall) (*toolspec.Result, error) {
-	project := parseString(call.Args, "project", "")
-	prefix := parseString(call.Args, "prefix", "")
-
-	p.logToolCall(global.ToolProjectFileList, map[string]string{"project": project})
-
-	if project == "" {
-		return nil, fmt.Errorf("%s", "project parameter is required")
-	}
-
-	items, err := p.projects.ListFiles(project, prefix)
-	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
-	}
-
-	result := map[string]interface{}{
-		"project": project,
-		"files":   items,
-		"count":   len(items),
-	}
-
-	return createJSONResult(result)
-}
-
-func (p *Provider) handleProjectFileGet(call *toolspec.ToolCall) (*toolspec.Result, error) {
-	project := parseString(call.Args, "project", "")
-	path := parseString(call.Args, "path", "")
-	byteOffset := int64(parseFloat64(call.Args, "byte_offset", 0))
-	maxBytes := int64(parseFloat64(call.Args, "max_bytes", 0))
-
-	p.logToolCall(global.ToolProjectFileGet, map[string]string{"project": project, "path": path})
-
-	if project == "" {
-		return nil, fmt.Errorf("%s", "project parameter is required")
-	}
-	if path == "" {
-		return nil, fmt.Errorf("%s", "path parameter is required")
-	}
-
-	item, err := p.projects.GetFile(project, path, byteOffset, maxBytes)
-	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
-	}
-
-	return createJSONResult(item)
-}
-
-func (p *Provider) handleProjectFilePut(call *toolspec.ToolCall) (*toolspec.Result, error) {
-	project := parseString(call.Args, "project", "")
-	path := parseString(call.Args, "path", "")
-	content := parseString(call.Args, "content", "")
-	summary := parseString(call.Args, "summary", "")
-
-	p.logToolCall(global.ToolProjectFilePut, map[string]string{"project": project, "path": path})
-
-	if project == "" {
-		return nil, fmt.Errorf("%s", "project parameter is required")
-	}
-	if path == "" {
-		return nil, fmt.Errorf("%s", "path parameter is required")
-	}
-	if content == "" {
-		return nil, fmt.Errorf("%s", "content parameter is required")
-	}
-
-	created, err := p.projects.PutFile(project, path, content, summary)
-	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
-	}
-
-	result := map[string]interface{}{
-		"project": project,
-		"path":    path,
-		"created": created,
-	}
-
-	return createJSONResult(result)
-}
-
-func (p *Provider) handleProjectFileAppend(call *toolspec.ToolCall) (*toolspec.Result, error) {
-	project := parseString(call.Args, "project", "")
-	path := parseString(call.Args, "path", "")
-	content := parseString(call.Args, "content", "")
-	summary := parseString(call.Args, "summary", "")
-
-	p.logToolCall(global.ToolProjectFileAppend, map[string]string{"project": project, "path": path})
-
-	if project == "" {
-		return nil, fmt.Errorf("%s", "project parameter is required")
-	}
-	if path == "" {
-		return nil, fmt.Errorf("%s", "path parameter is required")
-	}
-	if content == "" {
-		return nil, fmt.Errorf("%s", "content parameter is required")
-	}
-
-	err := p.projects.AppendFile(project, path, content, summary)
-	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
-	}
-
-	result := map[string]interface{}{
-		"project": project,
-		"path":    path,
-		"success": true,
-	}
-
-	return createJSONResult(result)
-}
-
-func (p *Provider) handleProjectFileEdit(call *toolspec.ToolCall) (*toolspec.Result, error) {
-	project := parseString(call.Args, "project", "")
-	path := parseString(call.Args, "path", "")
-	oldString := parseString(call.Args, "old_string", "")
-	newString := parseString(call.Args, "new_string", "")
-	replaceAll := parseBool(call.Args, "replace_all", false)
-
-	p.logToolCall(global.ToolProjectFileEdit, map[string]string{"project": project, "path": path})
-
-	if project == "" {
-		return nil, fmt.Errorf("%s", "project parameter is required")
-	}
-	if path == "" {
-		return nil, fmt.Errorf("%s", "path parameter is required")
-	}
-	if oldString == "" {
-		return nil, fmt.Errorf("%s", "old_string parameter is required")
-	}
-	// new_string can be empty to delete the old_string
-
-	err := p.projects.EditFile(project, path, oldString, newString, replaceAll)
-	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
-	}
-
-	result := map[string]interface{}{
-		"project": project,
-		"path":    path,
-		"success": true,
-	}
-
-	return createJSONResult(result)
-}
-
-func (p *Provider) handleProjectFileRename(call *toolspec.ToolCall) (*toolspec.Result, error) {
-	project := parseString(call.Args, "project", "")
-	fromPath := parseString(call.Args, "from_path", "")
-	toPath := parseString(call.Args, "to_path", "")
-
-	p.logToolCall(global.ToolProjectFileRename, map[string]string{"project": project, "from": fromPath, "to": toPath})
-
-	if project == "" {
-		return nil, fmt.Errorf("%s", "project parameter is required")
-	}
-	if fromPath == "" {
-		return nil, fmt.Errorf("%s", "from_path parameter is required")
-	}
-	if toPath == "" {
-		return nil, fmt.Errorf("%s", "to_path parameter is required")
-	}
-
-	if err := p.projects.RenameFile(project, fromPath, toPath); err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
-	}
-
-	result := map[string]interface{}{
-		"project": project,
-		"from":    fromPath,
-		"to":      toPath,
-		"renamed": true,
-	}
-
-	return createJSONResult(result)
-}
-
-func (p *Provider) handleProjectFileDelete(call *toolspec.ToolCall) (*toolspec.Result, error) {
-	project := parseString(call.Args, "project", "")
-	path := parseString(call.Args, "path", "")
-
-	p.logToolCall(global.ToolProjectFileDelete, map[string]string{"project": project, "path": path})
-
-	if project == "" {
-		return nil, fmt.Errorf("%s", "project parameter is required")
-	}
-	if path == "" {
-		return nil, fmt.Errorf("%s", "path parameter is required")
-	}
-
-	if err := p.projects.DeleteFile(project, path); err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
-	}
-
-	result := map[string]interface{}{
-		"project": project,
-		"path":    path,
-		"deleted": true,
-	}
-
-	return createJSONResult(result)
-}
-
-func (p *Provider) handleProjectFileSearch(call *toolspec.ToolCall) (*toolspec.Result, error) {
-	project := parseString(call.Args, "project", "")
-	query := parseString(call.Args, "query", "")
-	limit := int(parseFloat64(call.Args, "limit", 0))
-	offset := int(parseFloat64(call.Args, "offset", 0))
-
-	p.logToolCall(global.ToolProjectFileSearch, map[string]string{"project": project, "query": query})
-
-	if query == "" {
-		return nil, fmt.Errorf("%s", "query parameter is required")
-	}
-
-	items, total, err := p.projects.SearchFiles(project, query, limit, offset)
-	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
-	}
-
-	result := map[string]interface{}{
-		"items": items,
-		"total": total,
-		"count": len(items),
-	}
-	if project != "" {
-		result["project"] = project
-	}
-
-	return createJSONResult(result)
-}
-
-// handleProjectFileConvert converts files in a project to Markdown
-func (p *Provider) handleProjectFileConvert(call *toolspec.ToolCall) (*toolspec.Result, error) {
+// handleFileConvert converts files in a project to Markdown. Project files only.
+func (p *Provider) handleFileConvert(call *toolspec.ToolCall) (*toolspec.Result, error) {
 	project := parseString(call.Args, "project", "")
 	path := parseString(call.Args, "path", "")
 	recursive := parseBool(call.Args, "recursive", false)
 
-	p.logToolCall(global.ToolProjectFileConvert, map[string]string{"project": project, "path": path})
+	p.logToolCall(global.ToolFileConvert, map[string]string{"project": project, "path": path})
 
 	if project == "" {
 		return nil, fmt.Errorf("%s", "project parameter is required")
@@ -343,14 +110,14 @@ func (p *Provider) handleProjectFileConvert(call *toolspec.ToolCall) (*toolspec.
 	return createJSONResult(response)
 }
 
-// handleProjectFileExtract extracts a zip archive within a project's files directory
-func (p *Provider) handleProjectFileExtract(call *toolspec.ToolCall) (*toolspec.Result, error) {
+// handleFileExtract extracts a zip archive within a project's files directory. Project files only.
+func (p *Provider) handleFileExtract(call *toolspec.ToolCall) (*toolspec.Result, error) {
 	project := parseString(call.Args, "project", "")
 	path := parseString(call.Args, "path", "")
 	overwrite := parseBool(call.Args, "overwrite", false)
 	doConvert := parseBool(call.Args, "convert", false)
 
-	p.logToolCall(global.ToolProjectFileExtract, map[string]string{
+	p.logToolCall(global.ToolFileExtract, map[string]string{
 		"project":   project,
 		"path":      path,
 		"overwrite": fmt.Sprintf("%t", overwrite),

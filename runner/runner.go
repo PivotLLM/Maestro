@@ -1859,7 +1859,7 @@ func (r *Runner) buildPrompt(project, path string, task *global.Task) (string, e
 	// 0. Always inject project name (mandatory for cross-project isolation)
 	sb.WriteString("=== PROJECT CONTEXT ===\n\n")
 	sb.WriteString(fmt.Sprintf("Project: %s\n", project))
-	sb.WriteString("IMPORTANT: Use this project name for ALL file operations (project_file_list, project_file_get, project_file_search).\n\n")
+	sb.WriteString("IMPORTANT: Use this project name (with source=project) for ALL file operations (file_list, file_get, file_search).\n\n")
 
 	// Append optional user-defined context if available
 	if proj, err := r.projects.Get(project); err == nil && proj.Context != "" {
@@ -2843,7 +2843,7 @@ func (r *Runner) buildQAPrompt(project, path string, task *global.Task) (string,
 	// 0. Always inject project name (mandatory for cross-project isolation)
 	sb.WriteString("=== PROJECT CONTEXT ===\n\n")
 	sb.WriteString(fmt.Sprintf("Project: %s\n", project))
-	sb.WriteString("IMPORTANT: Use this project name for ALL file operations (project_file_list, project_file_get, project_file_search).\n\n")
+	sb.WriteString("IMPORTANT: Use this project name (with source=project) for ALL file operations (file_list, file_get, file_search).\n\n")
 
 	// Append optional user-defined context if available
 	if proj, err := r.projects.Get(project); err == nil && proj.Context != "" {
@@ -2952,7 +2952,7 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, budget *run
 	// 0. Always inject project name (mandatory for cross-project isolation)
 	sb.WriteString("=== PROJECT CONTEXT ===\n\n")
 	sb.WriteString(fmt.Sprintf("Project: %s\n", project))
-	sb.WriteString("IMPORTANT: Use this project name for ALL file operations (project_file_list, project_file_get, project_file_search).\n\n")
+	sb.WriteString("IMPORTANT: Use this project name (with source=project) for ALL file operations (file_list, file_get, file_search).\n\n")
 
 	// Append optional user-defined context if available
 	if proj, err := r.projects.Get(project); err == nil && proj.Context != "" {

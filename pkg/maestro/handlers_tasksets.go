@@ -314,7 +314,7 @@ func (p *Provider) handleTaskSetReset(call *toolspec.ToolCall) (*toolspec.Result
 	// Add reminder if report was ended
 	if reportEnded {
 		result["report_ended"] = true
-		result["reminder"] = "Call report_start with title and optional intro before running tasks to initialize a new report."
+		result["reminder"] = "Call report_write (action=start) with title and optional intro before running tasks to initialize a new report."
 	}
 
 	return createJSONResult(result)

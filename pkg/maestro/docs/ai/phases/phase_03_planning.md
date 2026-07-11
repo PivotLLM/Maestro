@@ -29,7 +29,7 @@ Use this phase:
 ## Step-by-Step Checklist
 
 1. **Review requirements**
-   - Read `requirements.md` using `project_file_get`.
+   - Read `requirements.md` using `file_get` (source=project).
    - Ensure you understand:
      - The objective,
      - Inputs,
@@ -63,7 +63,7 @@ Use this phase:
 
 5. **Document the plan**
    - Write a human-readable plan to `plan.md`:
-     - `project_file_put(project="<project>", path="plan.md", content="...")`
+     - `file_put(source="project", project="<project>", path="plan.md", content="...")`
    - The plan should:
      - Describe each phase and its outputs,
      - Mention expected lists and task sets,
@@ -81,8 +81,8 @@ Use this phase:
 
 ## Typical Tools Used
 
-- `project_file_get` – read `requirements.md`
-- `project_file_put` – write or update `plan.md`
+- `file_get` – read `requirements.md`
+- `file_put` – write or update `plan.md`
 - `project_log_append` – record milestones
 - `list_list` – check for existing playbook lists
 

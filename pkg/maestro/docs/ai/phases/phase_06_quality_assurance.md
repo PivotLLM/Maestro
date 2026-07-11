@@ -171,7 +171,8 @@ QA must independently verify outputs against source documents.
 10. **Document QA summary**
     - Create a QA summary file:
     ```
-    project_file_put(
+    file_put(
+      source="project",
       project="<project>",
       path="qa_summary.md",
       content="..."
@@ -239,8 +240,8 @@ For each task output, QA should verify:
 - `task_run` – execute QA tasks
 - `task_status` – track QA task status
 - `task_report` – generate report with QA status
-- `project_file_get` – access source documents for verification
-- `project_file_put` – write QA summary
+- `file_get` – access source documents for verification
+- `file_put` – write QA summary
 - `llm_list` – check available LLMs for QA
 - `project_log_append` – record QA progress
 

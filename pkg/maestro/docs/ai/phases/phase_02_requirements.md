@@ -39,8 +39,8 @@ Use this phase:
 2. **Verify evidence accessibility** (for audits/evaluations)
    - Review evidence locations documented in Phase 01
    - **Verify each evidence source is accessible**:
-     - For project files: `project_file_list(project="<project>")` or `project_file_get`
-     - For playbook files: `playbook_file_list` or `playbook_file_get`
+     - For project files: `file_list(source="project", project="<project>")` or `file_get`
+     - For playbook files: `file_list(source="playbook")` or `file_get`
      - For external paths: Confirm with user that files are in place
    - If evidence is missing or inaccessible:
      - Inform the user immediately
@@ -62,7 +62,7 @@ Use this phase:
 
 5. **Write a requirements summary**
    - Create or update a file such as `requirements.md`:
-     - `project_file_put(project="<project>", path="requirements.md", content="...")`
+     - `file_put(source="project", project="<project>", path="requirements.md", content="...")`
    - Include:
      - Restatement of the objective,
      - List of inputs and where they are stored,
@@ -84,11 +84,11 @@ Use this phase:
 
 ## Typical Tools Used
 
-- `project_file_put` – create or update `requirements.md`
-- `project_file_get` – read existing notes
-- `project_file_list` – verify evidence files exist in project
-- `playbook_file_list` – verify evidence files exist in playbook
-- `playbook_file_get` – read playbook evidence files
+- `file_put` (source=project) – create or update `requirements.md`
+- `file_get` (source=project) – read existing notes
+- `file_list` (source=project) – verify evidence files exist in project
+- `file_list` (source=playbook) – verify evidence files exist in playbook
+- `file_get` (source=playbook) – read playbook evidence files
 - `project_log_append` – record milestones
 - `project_update` – update project status
 - `llm_dispatch` – (optional) help distill long user descriptions into a concise requirements summary

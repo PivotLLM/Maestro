@@ -93,7 +93,8 @@ list_item_search(
 Create a dedicated file to capture process improvements discovered during review:
 
 ```
-project_file_append(
+file_append(
+  source="project",
   project="<project>",
   path="review/lessons-learned.md",
   content="## Finding: [Title]\n\n[Description of what was learned...]\n\n"
@@ -105,7 +106,8 @@ project_file_append(
 When reviewing reveals that certain items need special handling in future work, capture this guidance and add it to the playbook:
 
 ```
-playbook_file_append(
+file_append(
+  source="playbook",
   playbook="<playbook>",
   path="guidance/<item-category>.md",
   content="## [Item ID]\n\n[Specific guidance for this item...]\n\n"
@@ -115,7 +117,7 @@ playbook_file_append(
 ## Step-by-Step Checklist
 
 1. **Prepare for review session**
-   - Ensure reports are generated: `report_list(project="<project>")`
+   - Ensure reports are generated: `report_get(project="<project>")` (omit report to list)
    - List tasks to get UUIDs: `task_list(project="<project>", path="<taskset>")`
    - Identify which items need human review (typically all, for audits)
 
@@ -171,7 +173,8 @@ playbook_file_append(
 7. **Update playbook with improvements**
    - Add new guidance files:
      ```
-     playbook_file_put(
+     file_put(
+       source="playbook",
        playbook="<playbook>",
        path="guidance/<category>.md",
        content="# [Category] Guidance\n\n..."
@@ -188,7 +191,7 @@ playbook_file_append(
      ```
    - Or start a new report session if you want a fresh report:
      ```
-     report_start(project="<project>", title="Reviewed Report")
+     report_write(action="start", project="<project>", title="Reviewed Report")
      ```
 
 9. **Finalize review**
@@ -213,8 +216,8 @@ playbook_file_append(
 - `list_item_update` – mark items as reviewed (complete=true)
 - `list_item_search` – find items not yet reviewed (complete=false)
 - `list_get_summary` – check review progress
-- `project_file_put/append` – document lessons learned
-- `playbook_file_put/append` – add guidance to playbook
+- `file_put/append` (source=project) – document lessons learned
+- `file_put/append` (source=playbook) – add guidance to playbook
 - `project_log_append` – log review milestones
 
 ## Expected Outputs

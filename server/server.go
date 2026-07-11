@@ -6,9 +6,9 @@
 package server
 
 import (
+	"context"
 	"github.com/PivotLLM/Maestro/pkg/maestro"
 	"github.com/PivotLLM/toolspec"
-	"context"
 	"strings"
 
 	"fmt"
@@ -156,10 +156,10 @@ func (s *Server) registerTools() error {
 	for _, t := range tools {
 		// Convert toolspec tool to MCP tool
 		// We can use the readOnly/destructive helpers if we want, or just create directly.
-		
+
 		var mcpOpts []mcp.ToolOption
 		mcpOpts = append(mcpOpts, mcp.WithDescription(t.Description))
-		
+
 		// Use hints if available
 		if t.Hints != nil {
 			var mcpHints mcp.ToolAnnotation
@@ -178,7 +178,7 @@ func (s *Server) registerTools() error {
 		// Build parameters map since mcp.NewTool takes string opts but actually just builds an InputSchema.
 		// A cleaner way is to use mcp.NewTool and override the InputSchema.
 		tool := mcp.NewTool(t.Name, mcpOpts...)
-		
+
 		// Map parameters to MCP JSON Schema Properties
 		tool.InputSchema.Type = "object"
 		tool.InputSchema.Properties = make(map[string]interface{})
@@ -195,7 +195,7 @@ func (s *Server) registerTools() error {
 
 		// Capture the handler
 		handler := t.Handler
-		
+
 		s.mcpServer.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			// Convert mcp.CallToolRequest to toolspec.ToolCall
 			var args map[string]interface{}
@@ -210,7 +210,7 @@ func (s *Server) registerTools() error {
 				Ctx:  ctx,
 				Args: args,
 			}
-			
+
 			res, err := handler(call)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -218,7 +218,7 @@ func (s *Server) registerTools() error {
 			if res.IsError {
 				return mcp.NewToolResultError(res.ForLLM), nil
 			}
-			
+
 			// We try to return it as text or JSON depending on what it looks like.
 			// Currently our tools return JSON strings via createJSONResult
 			// If it's valid JSON, we should probably return it as JSON or just text.

@@ -66,7 +66,7 @@ Tests that directories are created properly on first run:
 
 ### Section 1: Reference Tools (Read-Only, Embedded)
 
-**Tools tested:** `reference_list`, `reference_get`, `reference_search`
+**Tools tested:** `file_list`, `file_get`, `file_search` (source=reference)
 
 **Coverage:**
 - List all reference files
@@ -80,7 +80,7 @@ Tests that directories are created properly on first run:
 
 ### Section 2: Playbook Tools
 
-**Tools tested:** `playbook_list`, `playbook_create`, `playbook_rename`, `playbook_delete`, `playbook_file_*`, `playbook_search`
+**Tools tested:** `playbook_list`, `playbook_create`, `playbook_rename`, `playbook_delete`, `file_*`, `file_search`
 
 **Coverage:**
 - Playbook CRUD operations
@@ -110,7 +110,7 @@ Tests that directories are created properly on first run:
 
 ### Section 4: Project File Tools
 
-**Tools tested:** `project_file_list`, `project_file_get`, `project_file_put`, `project_file_append`, `project_file_edit`, `project_file_rename`, `project_file_delete`, `project_file_search`
+**Tools tested:** `file_list`, `file_get`, `file_put`, `file_append`, `file_edit`, `file_rename`, `file_delete`, `file_search`
 
 **Coverage:**
 - File creation with content and metadata

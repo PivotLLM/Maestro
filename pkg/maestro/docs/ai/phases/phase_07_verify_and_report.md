@@ -57,8 +57,8 @@ Use this phase when:
 
 5. **Check auto-generated reports**
    - Reports are **auto-generated** when the runner completes task sets
-   - Use `report_list(project="<project>")` to see available reports
-   - Use `report_read(project="<project>", report="<name>")` to read a report
+   - Use `report_get(project="<project>")` (omit report to list) to see available reports
+   - Use `report_get(project="<project>", report="<name>")` to read a report
    - Reports are in `<project>/reports/` directory
 
 6. **Generate additional reports if needed**
@@ -90,9 +90,10 @@ Use this phase when:
      ```
 
 7. **Add custom content to reports**
-   - Use `report_append` to add custom sections:
+   - Use `report_write` (action=append) to add custom sections:
      ```
-     report_append(
+     report_write(
+       action="append",
        project="<project>",
        content="## Executive Summary\n\n..."
      )
@@ -123,21 +124,20 @@ Use this phase when:
      - Were there steps that could be generalized?
    - Extract any reusable patterns or templates.
    - Store them in playbooks for future use:
-     - `playbook_file_put(playbook="<playbook>", path="template.md", content="...")`
+     - `file_put(source="playbook", playbook="<playbook>", path="template.md", content="...")`
 
 ## Typical Tools Used
 
 - `task_status` – verify status of all tasks
 - `task_report` – generate custom/filtered reports
-- `report_list` – list auto-generated reports
-- `report_read` – read a specific report
-- `report_append` – add custom content to reports
+- `report_get` – list auto-generated reports (omit report), or read a specific report
+- `report_write` – add custom content to reports (action=append)
 - `list_get_summary` – verify list item counts
-- `project_file_get` – inspect plan and items as needed
+- `file_get` – inspect plan and items as needed
 - `llm_dispatch` – assist with drafting supplementary content
 - `project_update` – mark project as done
 - `project_log_append` – record final milestone
-- `playbook_file_put` – save reusable templates
+- `file_put` – save reusable templates
 
 ## Expected Outputs
 

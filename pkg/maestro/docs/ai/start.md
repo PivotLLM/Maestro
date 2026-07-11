@@ -27,17 +27,21 @@ Think of yourself as a **project manager and senior analyst**. You should:
 
 Maestro organizes information into three fixed domains:
 
-| Domain | Purpose | Tools |
+| Domain | Purpose | Structure/management tools |
 |--------|---------|-------|
-| **Reference** | Built-in documentation (read-only, embedded) | `reference_list`, `reference_get`, `reference_search` |
-| **Playbooks** | User-created reusable procedures and knowledge | `playbook_*` tools |
-| **Projects** | Active work with task sets, files, and logs | `project_*`, `taskset_*` (incl. `taskset_reset`), `task_*` tools |
+| **Reference** | Built-in documentation (read-only, embedded) | *(read-only; use the `file_*` tools below)* |
+| **Playbooks** | User-created reusable procedures and knowledge | `playbook_*` (create/rename/delete/list the playbook itself) |
+| **Projects** | Active work with task sets, files, and logs | `project_*` (project + logs), `taskset_*` (incl. `taskset_reset`), `task_*` |
 
-**Cross-Domain Features**:
+**Cross-Domain Features** (one tool family, pick the domain with `source`):
+- **Files**: The `file_*` tools operate on **any** domain via a `source` parameter — always pass `source` (`project`, `playbook`, or `reference`) plus the matching `project`/`playbook` name.
+  - Read (all three domains, incl. `reference`): `file_list`, `file_get`, `file_search`
+  - Write (`project`/`playbook` only — `reference` is read-only): `file_put`, `file_append`, `file_edit`, `file_rename`, `file_delete`
+  - Also: `file_copy` (within/between domains), `file_import`, `file_convert`, `file_extract` (project only)
 - **Lists**: Structured item collections available in all three domains (`list_*`, `list_item_*`, `list_create_tasks`)
-- **Reports**: Auto-generated reports in project's `reports/` directory (`report_*` tools)
+- **Reports**: Project report session + generation (`report_get`, `report_write`, `report_create`), written to the project's `reports/` directory
 
-Additional tools: `llm_list`, `llm_dispatch`, `llm_test`, `health`, `file_copy`, `file_import`, `project_file_extract`, `project_file_convert`
+Additional tools: `llm_list`, `llm_dispatch`, `llm_test`, `health`
 
 ---
 
@@ -56,7 +60,7 @@ Every Maestro project follows eight phases. **Read the phase-specific document**
 | 7 | `phases/phase_07_verify_and_report.md` | Verify completeness and generate report |
 | 8 | `phases/phase_08_review.md` | Facilitated human review and improvement |
 
-Use `reference_get` to read each phase document when needed.
+Use `file_get` (source=reference) to read each phase document when needed.
 
 ---
 
@@ -532,11 +536,11 @@ QA tasks should:
 **Reports are auto-generated** when the runner completes task sets. Each task's results are rendered using configured templates and appended to the project's main report file.
 
 **Report Tools**:
-- `report_start(project, title, intro)`: Start a new report session with a prefix
-- `report_append(project, content)`: Manually append content to the report
-- `report_end(project)`: End the current report session
-- `report_list(project)`: List all reports in a project
-- `report_read(project, report)`: Read a specific report
+- `report_write(project, action="start", title, intro)`: Start a new report session with a prefix
+- `report_write(project, action="append", content)`: Manually append content to the report (append is the default action)
+- `report_write(project, action="end")`: End the current report session
+- `report_get(project)`: List all reports in a project (omit report)
+- `report_get(project, report)`: Read a specific report
 
 **Report Location**: `<project>/reports/<prefix>Report.md`
 
@@ -676,7 +680,7 @@ task_run(project="my-project", path="analysis")
 
 **Solution**: Verify the file path is correct:
 1. Check the playbook name and file path spelling
-2. Use `playbook_file_list` to see available files in the playbook
+2. Use `file_list` (source=playbook) to see available files in the playbook
 3. Ensure the file was created before referencing it
 
 **Example**:
@@ -685,7 +689,7 @@ task_run(project="my-project", path="analysis")
 task_create(..., instructions_file="my-playbook/prompts/worker.md", ...)
 
 # Correct - verify file exists first
-playbook_file_list(playbook="my-playbook")
+file_list(source="playbook", playbook="my-playbook")
 # Shows: instructions/assess_control.md
 
 task_create(..., instructions_file="my-playbook/instructions/assess_control.md", ...)

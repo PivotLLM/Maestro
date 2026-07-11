@@ -185,8 +185,8 @@ EXAMPLES:
 ENVIRONMENT:
     MAESTRO_CONFIG    Path to configuration file (if --config not used)
 
-For more information, use the reference_list and reference_get tools
-to access the embedded documentation.
+For more information, call start_here, or use the file_list and file_get
+tools with source="reference" to access the embedded documentation.
 `, global.ProgramName, global.Version,
 		global.ProgramName,
 		global.DefaultBaseDir, global.DefaultConfigFileName,

@@ -376,9 +376,9 @@ Reference files are embedded in the executable at compile time using Go's embed 
 
 | Tool | Purpose |
 |------|---------|
-| `reference_list` | List all reference files (embedded + external) |
-| `reference_get` | Read a reference file by path |
-| `reference_search` | Search reference files by content |
+| `file_list` (source=reference) | List all reference files (embedded + external) |
+| `file_get` (source=reference) | Read a reference file by path |
+| `file_search` (source=reference) | Search reference files by content |
 
 External reference files appear with their configured mount prefix in paths (e.g., `user/file.md`, `standards/NIST.md`).
 
@@ -409,14 +409,14 @@ Playbooks are user-created collections of reusable knowledge and procedures.
 | `playbook_create` | Create a new playbook |
 | `playbook_rename` | Rename a playbook |
 | `playbook_delete` | Delete a playbook and all files |
-| `playbook_file_list` | List files in a playbook |
-| `playbook_file_get` | Read a file from a playbook |
-| `playbook_file_put` | Create or update a file |
-| `playbook_file_append` | Append content to a file |
-| `playbook_file_edit` | Edit a file using find/replace |
-| `playbook_file_rename` | Rename a file |
-| `playbook_file_delete` | Delete a file |
-| `playbook_search` | Search playbook files by content |
+| `file_list` | List files in a playbook (source="playbook") |
+| `file_get` | Read a file from a playbook (source="playbook") |
+| `file_put` | Create or update a file (source="playbook") |
+| `file_append` | Append content to a file (source="playbook") |
+| `file_edit` | Edit a file using find/replace (source="playbook") |
+| `file_rename` | Rename a file (source="playbook") |
+| `file_delete` | Delete a file (source="playbook") |
+| `file_search` | Search playbook files by content (source="playbook") |
 
 ---
 
@@ -542,16 +542,16 @@ The history provides a complete audit trail of every LLM interaction, including 
 | `project_list` | List all projects |
 | `project_rename` | Rename a project |
 | `project_delete` | Delete project and all contents |
-| `project_file_list` | List files in a project |
-| `project_file_get` | Read a file from a project |
-| `project_file_put` | Create or update a file |
-| `project_file_append` | Append content to a file |
-| `project_file_edit` | Edit a file using find/replace |
-| `project_file_rename` | Rename a file |
-| `project_file_delete` | Delete a file |
-| `project_file_search` | Search project files by content |
-| `project_file_convert` | Convert PDF, DOCX, XLSX to Markdown |
-| `project_file_extract` | Extract zip archives within project files |
+| `file_list` | List files in a project (source="project") |
+| `file_get` | Read a file from a project (source="project") |
+| `file_put` | Create or update a file (source="project") |
+| `file_append` | Append content to a file (source="project") |
+| `file_edit` | Edit a file using find/replace (source="project") |
+| `file_rename` | Rename a file (source="project") |
+| `file_delete` | Delete a file (source="project") |
+| `file_search` | Search project files by content (source="project") |
+| `file_convert` | Convert PDF, DOCX, XLSX to Markdown |
+| `file_extract` | Extract zip archives within project files |
 | `project_log_append` | Add entry to project log |
 | `project_log_get` | Retrieve log entries |
 
@@ -629,7 +629,7 @@ taskset_reset(
 - `"failed"`: Only resets tasks with status `failed`, leaving `done` tasks unchanged
 
 **When `end_report=true`:**
-- The response includes a reminder to call `report_start` before running tasks
+- The response includes a reminder to call `report_write` (action=start) before running tasks
 - Use this when you want to generate a fresh report with the re-run results
 
 ---
@@ -1457,9 +1457,9 @@ When a report file is first created, Maestro automatically adds:
 <Disclaimer template content>
 ```
 
-- **Title**: From `report_start` title parameter
-- **Issued date**: Captured when `report_start` is called (not when content is appended)
-- **Intro**: Optional introductory paragraph from `report_start`
+- **Title**: From `report_write` (action=start) title parameter
+- **Issued date**: Captured when `report_write` (action=start) is called (not when content is appended)
+- **Intro**: Optional introductory paragraph from `report_write` (action=start)
 - **Disclaimer**: Loaded from project's `disclaimer_template` field (mandatory)
 
 This ensures the issued date reflects when the report session began, not when the final content was written.
@@ -1545,16 +1545,14 @@ For projects requiring multiple report variants (e.g., client-facing and interna
 
 | Tool | Purpose |
 |------|---------|
-| `report_start` | Start a new report session with a prefix |
-| `report_append` | Append content to a report |
-| `report_end` | End the current report session |
-| `report_list` | List all reports in a project |
-| `report_read` | Read a specific report |
+| `report_write` | Manage a report session (action=start/append/end) |
+| `report_get` | List all reports in a project (omit report), or read a specific report |
 | `report_create` | Generate reports from task results (same as runner auto-report) |
 
 **Starting a Report Session**
 ```
-report_start(
+report_write(
+  action: "start",
   project: "my-project",
   title: "Security Audit",
   intro: "This report documents the audit findings."
@@ -1563,7 +1561,8 @@ report_start(
 
 **Appending to Reports**
 ```
-report_append(
+report_write(
+  action: "append",
   project: "my-project",
   content: "## Executive Summary\n\n..."
 )
@@ -1571,7 +1570,7 @@ report_append(
 
 **Listing Reports**
 ```
-report_list(project: "my-project")
+report_get(project: "my-project")
 ```
 
 **Generating Reports from Task Results**
@@ -1844,7 +1843,7 @@ Returns:
 
 **Security**: Symlinks that point outside the imported folder are automatically removed. This prevents path traversal attacks through symbolic links.
 
-### project_file_extract
+### file_extract
 
 Extract zip archives within a project's files directory.
 
@@ -1866,14 +1865,14 @@ Returns:
   convert_failed: int - Conversion failures
 ```
 
-Use `project_file_delete` to remove the archive after extraction if desired.
+Use `file_delete` to remove the archive after extraction if desired.
 
 **Extraction behavior**:
 - Archives are extracted in place: `foo.zip` → `foo/` in the same directory
 - Path traversal attacks in zip entries (e.g., `../etc/passwd`) are blocked
 - Symlinks in extracted content that escape the project are removed
 
-### project_file_convert
+### file_convert
 
 Convert document files to Markdown format.
 
@@ -1982,15 +1981,15 @@ This prevents partial writes and corruption.
 ## 19. MCP Tool Summary
 
 ### Reference Tools (3) - Read-Only
-`reference_list`, `reference_get`, `reference_search`
+`file_list`, `file_get`, `file_search` (source=reference)
 
 ### Playbook Tools (12)
 `playbook_list`, `playbook_create`, `playbook_rename`, `playbook_delete`
-`playbook_file_list`, `playbook_file_get`, `playbook_file_put`, `playbook_file_append`, `playbook_file_edit`, `playbook_file_rename`, `playbook_file_delete`, `playbook_search`
+`file_list`, `file_get`, `file_put`, `file_append`, `file_edit`, `file_rename`, `file_delete`, `file_search` (source="playbook")
 
 ### Project Tools (18)
 `project_create`, `project_get`, `project_update`, `project_list`, `project_rename`, `project_delete`
-`project_file_list`, `project_file_get`, `project_file_put`, `project_file_append`, `project_file_edit`, `project_file_rename`, `project_file_delete`, `project_file_search`, `project_file_convert`, `project_file_extract`
+`file_list`, `file_get`, `file_put`, `file_append`, `file_edit`, `file_rename`, `file_delete`, `file_search` (source="project"), `file_convert`, `file_extract`
 `project_log_append`, `project_log_get`
 
 ### Task Set Tools (6)
@@ -2005,8 +2004,8 @@ This prevents partial writes and corruption.
 `list_item_add`, `list_item_get`, `list_item_update`, `list_item_rename`, `list_item_remove`, `list_item_search`
 `list_create_tasks`
 
-### Report Tools (6)
-`report_list`, `report_read`, `report_start`, `report_append`, `report_end`, `report_create`
+### Report Tools (3)
+`report_get`, `report_write`, `report_create`
 
 ### Supervisor Tools (1)
 `supervisor_update`

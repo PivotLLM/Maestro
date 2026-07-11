@@ -72,27 +72,27 @@ func TestParseClaudeOutput_ProviderModelFromModelUsage(t *testing.T) {
 		want     string
 	}{
 		{
-			name: "opus_dominant_with_haiku_helper",
+			name:     "opus_dominant_with_haiku_helper",
 			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-haiku-4-5-20251001","modelUsage":{"claude-opus-4-7[1m]":{"inputTokens":1000,"outputTokens":500,"cacheReadInputTokens":2000,"cacheCreationInputTokens":3000},"claude-haiku-4-5-20251001":{"inputTokens":10,"outputTokens":20}}}`,
 			want:     "claude-opus-4-7",
 		},
 		{
-			name: "single_model_with_1m_suffix_stripped",
+			name:     "single_model_with_1m_suffix_stripped",
 			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-opus-4-7[1m]","modelUsage":{"claude-opus-4-7[1m]":{"inputTokens":42,"outputTokens":7}}}`,
 			want:     "claude-opus-4-7",
 		},
 		{
-			name: "model_usage_missing_falls_back_to_headline",
+			name:     "model_usage_missing_falls_back_to_headline",
 			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-haiku-4-5-20251001"}`,
 			want:     "claude-haiku-4-5-20251001",
 		},
 		{
-			name: "model_usage_empty_falls_back_to_headline",
+			name:     "model_usage_empty_falls_back_to_headline",
 			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-haiku-4-5-20251001","modelUsage":{}}`,
 			want:     "claude-haiku-4-5-20251001",
 		},
 		{
-			name: "model_usage_all_zero_totals_falls_back_to_headline",
+			name:     "model_usage_all_zero_totals_falls_back_to_headline",
 			envelope: `{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"x","stop_reason":"end_turn","session_id":"s","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"model":"claude-opus-4-7","modelUsage":{"claude-haiku-4-5-20251001":{},"claude-opus-4-7[1m]":{"inputTokens":0,"outputTokens":0,"cacheReadInputTokens":0,"cacheCreationInputTokens":0}}}`,
 			want:     "claude-opus-4-7",
 		},
