@@ -220,7 +220,7 @@ func (p *Provider) handleLLMDispatch(call *toolspec.ToolCall) (*toolspec.Result,
 		ContextKeys: contextKeys,
 	}
 
-	result, err := p.llm.Dispatch(req)
+	result, err := p.llm.Dispatch(call.Ctx, req)
 	if err != nil {
 		return &toolspec.Result{ForLLM: fmt.Sprint(err.Error()), IsError: true}, nil
 	}

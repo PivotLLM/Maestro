@@ -100,7 +100,10 @@ func (r *DispatchResult) ProviderReportedError() bool {
 // log and (when standalone) probe/recover; a host implementation may return
 // minimal descriptors since it owns model selection.
 type Dispatcher interface {
-	Dispatch(req *DispatchRequest) (*DispatchResult, error)
+	// Dispatch runs one LLM request. ctx carries the caller's request scope so a
+	// host dispatcher (e.g. one that runs each task as a sub-agent) can propagate
+	// cancellation and orchestration state such as recursion depth.
+	Dispatch(ctx context.Context, req *DispatchRequest) (*DispatchResult, error)
 	GetLLM(llmID string) *config.LLM
 	GetExecInfo(llmID string) *LLMExecInfo
 	TestLLM(llmID string) (bool, error)
@@ -268,7 +271,10 @@ func (s *Service) loadContextContent(contextKeys []string) (string, error) {
 }
 
 // Dispatch dispatches work to an LLM
-func (s *Service) Dispatch(req *DispatchRequest) (*DispatchResult, error) {
+// Dispatch satisfies the Dispatcher interface. The Service manages the command
+// LLM's process lifecycle itself (see callCommandLLM), so ctx is accepted for
+// interface parity but not used to cancel the subprocess.
+func (s *Service) Dispatch(_ context.Context, req *DispatchRequest) (*DispatchResult, error) {
 	// Validate request
 	llm, err := s.validateRequest(req)
 	if err != nil {
@@ -321,7 +327,7 @@ func (s *Service) TestLLM(llmID string) (bool, error) {
 		testPrompt = llm.RecoveryConfig.TestPrompt
 	}
 
-	result, err := s.Dispatch(&DispatchRequest{
+	result, err := s.Dispatch(context.Background(), &DispatchRequest{
 		LLMID:  llmID,
 		Prompt: testPrompt,
 	})
