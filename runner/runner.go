@@ -1334,7 +1334,7 @@ func (r *Runner) handleRecovery(ctx context.Context, project string, recovery *r
 			LLMID:  llmID,
 			Prompt: testPrompt,
 		}
-		result, err := r.llm.Dispatch(req)
+		result, err := r.llm.Dispatch(ctx, req)
 
 		if err != nil {
 			r.logger.Warnf("Project %s: Probe failed (infrastructure error): %v", project, err)
@@ -1405,7 +1405,7 @@ func (r *Runner) executeTaskWithRecovery(ctx context.Context, project, path stri
 }
 
 // executeTask executes a single task
-func (r *Runner) executeTask(_ context.Context, project, path string, task *global.Task, result *global.RunResult, budget *runBudget, limits global.Limits) {
+func (r *Runner) executeTask(ctx context.Context, project, path string, task *global.Task, result *global.RunResult, budget *runBudget, limits global.Limits) {
 	// Panic recovery to prevent crashes
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -1438,7 +1438,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 			// Check if QA needs to be run
 			if task.QA.Enabled && task.QA.Status != global.ExecutionStatusDone {
 				r.logger.Infof("Task %d: QA enabled and not complete, starting QA workflow", task.ID)
-				r.executeQAWorkflow(project, path, task, result, budget, limits)
+				r.executeQAWorkflow(ctx, project, path, task, result, budget, limits)
 			}
 			return
 		}
@@ -1521,7 +1521,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	r.logger.Infof("Task %d: Dispatching to LLM service", task.ID)
 	r.logLLMDispatch(task.ID, project, path, llmID, len(fullPrompt))
 	llmStartTime := time.Now()
-	dispatchResult, err := r.llm.Dispatch(dispatchReq)
+	dispatchResult, err := r.llm.Dispatch(ctx, dispatchReq)
 
 	// Handle infrastructure errors (command couldn't execute at all)
 	if err != nil {
@@ -1614,7 +1614,7 @@ func (r *Runner) executeTask(_ context.Context, project, path string, task *glob
 	// Check if QA is enabled after successful work completion
 	if task.QA.Enabled && task.Work.Status == global.ExecutionStatusDone {
 		r.logger.Infof("Task %d: QA enabled, starting QA workflow", task.ID)
-		r.executeQAWorkflow(project, path, task, result, budget, limits)
+		r.executeQAWorkflow(ctx, project, path, task, result, budget, limits)
 	}
 
 	// Log final "Finished" status for terminal states only
@@ -2457,7 +2457,7 @@ func ValidateTaskInstructions(instructionsFile, instructionsFileSource string) e
 }
 
 // executeQAWorkflow executes the QA workflow after successful work completion
-func (r *Runner) executeQAWorkflow(project, path string, task *global.Task, result *global.RunResult, budget *runBudget, limits global.Limits) {
+func (r *Runner) executeQAWorkflow(ctx context.Context, project, path string, task *global.Task, result *global.RunResult, budget *runBudget, limits global.Limits) {
 	r.logger.Infof("Task %d: Starting QA workflow (invocations: %d, max: %d)", task.ID, task.QA.Invocations, limits.MaxQA)
 	r.logToProject(project, fmt.Sprintf("Task %d: Starting QA workflow", task.ID))
 
@@ -2470,7 +2470,7 @@ func (r *Runner) executeQAWorkflow(project, path string, task *global.Task, resu
 		}
 
 		// Execute QA
-		err := r.executeQA(project, path, task, budget, limits)
+		err := r.executeQA(ctx, project, path, task, budget, limits)
 		if err != nil {
 			// Check if it's a schema validation error that can be retried
 			if sve, ok := IsSchemaValidationError(err); ok {
@@ -2554,7 +2554,7 @@ func (r *Runner) executeQAWorkflow(project, path string, task *global.Task, resu
 			r.logger.Infof("Task %d: QA verdict 'fail', revising work (%d/%d)", task.ID, task.QA.Invocations, limits.MaxQA)
 			r.logToProject(project, fmt.Sprintf("Task %d: QA failed, revising work (%d/%d)", task.ID, task.QA.Invocations, limits.MaxQA))
 
-			err = r.reviseWork(project, path, task, budget, limits)
+			err = r.reviseWork(ctx, project, path, task, budget, limits)
 			if err != nil {
 				r.logger.Errorf("Task %d: Work revision failed: %v", task.ID, err)
 				r.logToProject(project, fmt.Sprintf("Task %d: Work revision failed: %v", task.ID, err))
@@ -2579,7 +2579,7 @@ func (r *Runner) executeQAWorkflow(project, path string, task *global.Task, resu
 }
 
 // executeQA executes the QA step for a task
-func (r *Runner) executeQA(project, path string, task *global.Task, budget *runBudget, limits global.Limits) error {
+func (r *Runner) executeQA(ctx context.Context, project, path string, task *global.Task, budget *runBudget, limits global.Limits) error {
 	r.logger.Infof("Task %d: Executing QA", task.ID)
 
 	// Increment QA invocation count
@@ -2641,7 +2641,7 @@ func (r *Runner) executeQA(project, path string, task *global.Task, budget *runB
 
 	r.logLLMDispatch(task.ID, project, path, qaLLMID, len(qaPrompt))
 	qaLLMStartTime := time.Now()
-	dispatchResult, err := r.llm.Dispatch(dispatchReq)
+	dispatchResult, err := r.llm.Dispatch(ctx, dispatchReq)
 	if err != nil {
 		r.recordHistory(project, task.UUID, "system", "error", fmt.Sprintf("QA LLM call failed: %v", err), qaLLMID, task.QA.Invocations)
 		r.logLLMFinish(task.ID, qaLLMID, nil, err.Error())
@@ -2942,7 +2942,7 @@ func (r *Runner) buildQAPrompt(project, path string, task *global.Task) (string,
 }
 
 // reviseWork re-executes the work with QA feedback
-func (r *Runner) reviseWork(project, path string, task *global.Task, budget *runBudget, limits global.Limits) error {
+func (r *Runner) reviseWork(ctx context.Context, project, path string, task *global.Task, budget *runBudget, limits global.Limits) error {
 	r.logger.Infof("Task %d: Revising work with QA feedback", task.ID)
 	r.logToProject(project, fmt.Sprintf("Task %d: Revising work with QA feedback", task.ID))
 
@@ -3069,7 +3069,7 @@ func (r *Runner) reviseWork(project, path string, task *global.Task, budget *run
 
 	r.logLLMDispatch(task.ID, project, path, llmID, len(fullPrompt))
 	revisionLLMStartTime := time.Now()
-	dispatchResult, err := r.llm.Dispatch(dispatchReq)
+	dispatchResult, err := r.llm.Dispatch(ctx, dispatchReq)
 	if err != nil {
 		r.recordHistory(project, task.UUID, "system", "error", fmt.Sprintf("Revision LLM call failed: %v", err), llmID, task.Work.Invocations)
 		r.logLLMFinish(task.ID, llmID, nil, err.Error())
