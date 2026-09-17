@@ -128,6 +128,30 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 		// The host delivers completions via the injected sink, so the legacy
 		// HTTP callback_url parameter is meaningless here — hide it.
 		defs = withoutParam(defs, "callback_url")
+		// Model hints are still accepted, but they name a host model rather than
+		// a Maestro LLM config entry: say so instead of pointing at llm_list.
+		defs = withParamDescription(defs, "llm_model_id", hostModelHintDescription)
+		defs = withParamDescription(defs, "qa_llm_model_id", hostQAModelHintDescription)
+	}
+	return defs
+}
+
+// Under host dispatch the host (not Maestro) resolves model hints, so the
+// parameter descriptions must describe the host's vocabulary.
+const (
+	hostModelHintDescription   = "Optional model hint for the worker, passed to the host: one of the host agent's configured model aliases. Leave empty to use the host's default model. Unknown aliases fail the task without retry."
+	hostQAModelHintDescription = "Optional model hint for QA, passed to the host: one of the host agent's configured model aliases. Leave empty to use the host's default model. Unknown aliases fail the task without retry."
+)
+
+// withParamDescription returns defs with the description of every parameter
+// named param replaced by desc.
+func withParamDescription(defs []toolspec.ToolDefinition, param, desc string) []toolspec.ToolDefinition {
+	for i := range defs {
+		for j := range defs[i].Parameters {
+			if defs[i].Parameters[j].Name == param {
+				defs[i].Parameters[j].Description = desc
+			}
+		}
 	}
 	return defs
 }

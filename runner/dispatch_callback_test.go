@@ -6,6 +6,7 @@
 package runner
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -177,7 +178,7 @@ func TestDispatch_NoLLMsEnabled(t *testing.T) {
 		Prompt:  "this prompt should never reach an LLM",
 	}
 
-	dispatchResult, err := runner.RunDispatch(req, rec.sink)
+	dispatchResult, err := runner.RunDispatch(context.Background(), req, rec.sink)
 	if err != nil {
 		t.Fatalf("RunDispatch returned error: %v", err)
 	}
@@ -285,7 +286,7 @@ func TestDispatch_BuildPromptFailure(t *testing.T) {
 		InstructionsFileSource: "project_files",
 	}
 
-	dispatchResult, err := runner.RunDispatch(req, rec.sink)
+	dispatchResult, err := runner.RunDispatch(context.Background(), req, rec.sink)
 	if err != nil {
 		t.Fatalf("RunDispatch returned error: %v", err)
 	}
@@ -358,7 +359,7 @@ func TestDispatch_SuccessCallback(t *testing.T) {
 		Prompt:  "hello",
 	}
 
-	if _, err := runner.RunDispatch(req, rec.sink); err != nil {
+	if _, err := runner.RunDispatch(context.Background(), req, rec.sink); err != nil {
 		t.Fatalf("RunDispatch returned error: %v", err)
 	}
 
@@ -445,7 +446,7 @@ func TestDispatch_GetTaskFailureAfterCreate(t *testing.T) {
 	}
 
 	runner.activeRuns.Add(1)
-	runner.runDispatchExecution(req, task, path, failingGetTask, rec.sink)
+	runner.runDispatchExecution(context.Background(), req, task, path, failingGetTask, rec.sink)
 
 	payload := rec.wait(t, 5*time.Second)
 	runner.Wait()

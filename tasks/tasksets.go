@@ -672,6 +672,9 @@ func (s *Service) UpdateTask(project, taskUUID string, updates map[string]interf
 			if invocations, ok := workUpdates["invocations"].(int); ok {
 				task.Work.Invocations = invocations
 			}
+			if infraRetries, ok := workUpdates["infra_retries"].(int); ok {
+				task.Work.InfraRetries = infraRetries
+			}
 			if lastAttemptAt, ok := workUpdates["last_attempt_at"].(*time.Time); ok {
 				task.Work.LastAttemptAt = lastAttemptAt
 			}

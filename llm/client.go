@@ -92,6 +92,43 @@ func (r *DispatchResult) ProviderReportedError() bool {
 	return false
 }
 
+// PermanentError wraps a dispatch failure that no retry can fix (for example a
+// host refusing to nest sub-agents any deeper, or a model hint the host does not
+// recognise). The runner fails the task immediately instead of spending its
+// infrastructure-retry budget on it. Use Permanent to wrap and IsPermanent to
+// test; errors.Is/As work through the wrapper.
+type PermanentError struct {
+	Err error
+}
+
+func (e *PermanentError) Error() string {
+	if e == nil || e.Err == nil {
+		return "permanent dispatch error"
+	}
+	return e.Err.Error()
+}
+
+func (e *PermanentError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+// Permanent marks err as non-retryable. A nil err returns nil.
+func Permanent(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &PermanentError{Err: err}
+}
+
+// IsPermanent reports whether err (or any error it wraps) is a PermanentError.
+func IsPermanent(err error) bool {
+	var pe *PermanentError
+	return errors.As(err, &pe)
+}
+
 // Dispatcher is the LLM-execution seam the runner depends on. The built-in
 // *Service satisfies it for the standalone binary; a host (e.g. ClawEh) injects
 // its own implementation so that *the host* decides which model to call and how
