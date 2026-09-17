@@ -350,6 +350,17 @@ func New(cfg *config.Config, logger *logging.Logger, lib *library.Service, playb
 // Maestro LLM — it dispatches the prompt and lets the host choose the model.
 func (r *Runner) SetHostDispatched(v bool) { r.hostDispatched = v }
 
+// detachContext returns a context for an asynchronous run: it carries every
+// value from the caller's request context (so a host dispatcher sees the same
+// orchestration state — notably sub-agent depth — as the tool call that started
+// the run) but is never cancelled by it, because the run outlives the call.
+func detachContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return context.WithoutCancel(ctx)
+}
+
 // dispatchLLMID returns the model label to record for a dispatch. Under
 // host-dispatch the host selects the model, so Maestro neither resolves aliases
 // nor validates against its own (empty) LLM config and never fails for lack of a
@@ -844,11 +855,12 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest, notify Complet
 		return result, nil
 	}
 
-	// Prepare execution parameters
-	// Use context.Background() so the goroutine is not cancelled when the MCP request context ends
-	// (e.g., when the stdio connection closes after returning the response)
+	// Prepare execution parameters. The run outlives the tool call, so detach
+	// from the caller's cancellation (e.g. the stdio connection closing after the
+	// response is returned) while keeping its values: a host dispatcher relies on
+	// them for orchestration state such as sub-agent recursion depth.
 	execParams := &runExecutionParams{
-		ctx:           context.Background(),
+		ctx:           detachContext(ctx),
 		req:           req,
 		taskSetList:   taskSetList,
 		eligibleTasks: eligibleTasks,
@@ -1532,12 +1544,22 @@ func (r *Runner) executeTask(ctx context.Context, project, path string, task *gl
 		// see a paired dispatch/finish event.
 		r.logLLMFinish(task.ID, llmID, nil, err.Error())
 
+		// A permanent error (e.g. the host refusing to nest deeper, or an
+		// unknown model hint) can never succeed on retry: fail the task now
+		// rather than burning the infrastructure-retry budget on it.
+		if llm.IsPermanent(err) {
+			r.logger.Errorf("Task %d: Permanent dispatch error, not retrying: %v", task.ID, err)
+			r.logToProject(project, fmt.Sprintf("Task %d: Permanent dispatch error, not retrying: %v", task.ID, err))
+			r.finishTaskWithTerminalError(project, task, fmt.Sprintf("permanent dispatch error: %s", err.Error()), "dispatch_permanent_error", fullPrompt, result)
+			return
+		}
+
 		// Increment infrastructure retry counter
 		task.Work.InfraRetries++
 		if task.Work.InfraRetries >= limits.MaxRetries {
 			r.logger.Errorf("Task %d: Max infrastructure retries (%d) exceeded", task.ID, limits.MaxRetries)
 			r.logToProject(project, fmt.Sprintf("Task %d: Max infrastructure retries exceeded", task.ID))
-			r.finishTaskWithInfraError(project, path, task, err.Error(), fullPrompt, result, limits)
+			r.finishTaskWithTerminalError(project, task, fmt.Sprintf("max infrastructure retries exceeded: %s", err.Error()), "infra_max_retries_exceeded", fullPrompt, result)
 		} else {
 			// Schedule retry
 			r.logger.Infof("Task %d: Will retry (%d/%d infrastructure retries)", task.ID, task.Work.InfraRetries, limits.MaxRetries)
@@ -1915,9 +1937,9 @@ func (r *Runner) buildPrompt(project, path string, task *global.Task) (string, e
 	return sb.String(), nil
 }
 
-// finishTaskWithInfraError marks a task as failed due to infrastructure errors
-func (r *Runner) finishTaskWithInfraError(project, path string, task *global.Task, errorMsg, fullPrompt string, result *global.RunResult, limits global.Limits) {
-	finalError := fmt.Sprintf("max infrastructure retries exceeded: %s", errorMsg)
+// finishTaskWithTerminalError marks a task as failed with no further retries,
+// recording finalError on the task and writing a result file tagged with reason.
+func (r *Runner) finishTaskWithTerminalError(project string, task *global.Task, finalError, reason, fullPrompt string, result *global.RunResult) {
 	updates := map[string]interface{}{
 		"work": map[string]interface{}{
 			"status":        global.ExecutionStatusFailed,
@@ -1930,7 +1952,7 @@ func (r *Runner) finishTaskWithInfraError(project, path string, task *global.Tas
 	}
 
 	// Write result file with history for debugging
-	r.writeFailedTaskResult(project, task, fullPrompt, "", finalError, "infra_max_retries_exceeded")
+	r.writeFailedTaskResult(project, task, fullPrompt, "", finalError, reason)
 
 	result.TasksFailed++
 }
@@ -3442,8 +3464,10 @@ type DispatchResult struct {
 
 // RunDispatch creates a single-task taskset and executes it asynchronously.
 // Returns immediately with status "running". Fires a callback when complete if CallbackURL is set.
-// Dispatches run concurrently with regular runs and other dispatches.
-func (r *Runner) RunDispatch(req *DispatchRequest, notify CompletionSink) (*DispatchResult, error) {
+// Dispatches run concurrently with regular runs and other dispatches. ctx is the
+// caller's request context; its values (not its cancellation) are carried into
+// the asynchronous execution, see detachContext.
+func (r *Runner) RunDispatch(ctx context.Context, req *DispatchRequest, notify CompletionSink) (*DispatchResult, error) {
 	// Validate project exists
 	if !r.tasks.ProjectExists(req.Project) {
 		return nil, fmt.Errorf("project not found: %s", req.Project)
@@ -3498,7 +3522,7 @@ func (r *Runner) RunDispatch(req *DispatchRequest, notify CompletionSink) (*Disp
 	// Execute asynchronously - does NOT use runningProjects lock so dispatches
 	// run concurrently with regular runs and other dispatches
 	r.activeRuns.Add(1)
-	go r.runDispatchExecution(req, task, path, r.tasks.GetTask, notify)
+	go r.runDispatchExecution(detachContext(ctx), req, task, path, r.tasks.GetTask, notify)
 
 	return result, nil
 }
@@ -3507,7 +3531,7 @@ func (r *Runner) RunDispatch(req *DispatchRequest, notify CompletionSink) (*Disp
 // the activeRuns counter and the dispatch lock cleanup. Extracted from RunDispatch
 // so tests can drive specific failure paths (e.g. GetTask failing after a successful
 // CreateTask) deterministically by injecting initialLoadTask.
-func (r *Runner) runDispatchExecution(req *DispatchRequest, task *global.Task, path string,
+func (r *Runner) runDispatchExecution(ctx context.Context, req *DispatchRequest, task *global.Task, path string,
 	initialLoadTask func(project, taskUUID string) (*global.Task, string, error), notify CompletionSink) {
 	defer r.activeRuns.Done()
 
@@ -3534,7 +3558,7 @@ func (r *Runner) runDispatchExecution(req *DispatchRequest, task *global.Task, p
 	budget := r.newRunBudget([]*global.Task{taskInfo}, limits, 0.10)
 	localResult := &global.RunResult{}
 
-	r.executeTask(context.Background(), req.Project, taskSetPath, taskInfo, localResult, budget, limits)
+	r.executeTask(ctx, req.Project, taskSetPath, taskInfo, localResult, budget, limits)
 
 	// Dispatch is single-shot; any non-terminal state after executeTask
 	// (e.g. a buildPrompt failure that left the task in 'waiting' for retry)

@@ -584,7 +584,7 @@ func TestRunDispatch_ProjectNotFound(t *testing.T) {
 		Prompt:  "test prompt",
 	}
 
-	result, err := runner.RunDispatch(req, nil)
+	result, err := runner.RunDispatch(context.Background(), req, nil)
 	if err == nil {
 		t.Error("Expected error for nonexistent project, got nil")
 	}
@@ -612,7 +612,7 @@ func TestRunDispatch_NoPrompt(t *testing.T) {
 
 	// RunDispatch will succeed in creating the taskset but fail on CreateTask
 	// because work requires at least one prompt field.
-	result, err := runner.RunDispatch(req, nil)
+	result, err := runner.RunDispatch(context.Background(), req, nil)
 	if err == nil {
 		t.Error("Expected error when dispatching with no prompt/instructions, got nil")
 	}
