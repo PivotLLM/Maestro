@@ -436,6 +436,8 @@ type ImportAndConvertResult struct {
 	Recursive     bool   `json:"recursive"`
 	FilesImported int    `json:"files_imported"`
 	LinksImported int    `json:"links_imported"`
+	LinksRemoved  int    `json:"links_removed,omitempty"` // symlinks dropped for escaping the project
+	FilesRefused  int    `json:"files_refused,omitempty"` // entries skipped because the host does not permit reading them
 	ImportedTo    string `json:"imported_to"`
 	// Conversion results (only present if convert=true)
 	Converted      *int `json:"converted,omitempty"`
@@ -519,6 +521,8 @@ func (p *Provider) handleFileImport(call *toolspec.ToolCall) (*toolspec.Result, 
 		Recursive:     importResult.Recursive,
 		FilesImported: importResult.FilesImported,
 		LinksImported: importResult.LinksImported,
+		LinksRemoved:  importResult.LinksRemoved,
+		FilesRefused:  importResult.FilesRefused,
 		ImportedTo:    importResult.ImportedTo,
 	}
 
