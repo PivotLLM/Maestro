@@ -944,6 +944,12 @@ func (r *Runner) executeRun(params *runExecutionParams) {
 		runParallel = params.taskSetList.TaskSets[0].Parallel
 	}
 
+	if runParallel && !r.config.Runner().ParallelAllowed() {
+		r.logger.Warnf("Project %s: parallel execution requested but not allowed by runner configuration; running sequentially", params.req.Project)
+		r.logToProject(params.req.Project, "Parallel execution requested but not allowed by runner configuration; running sequentially")
+		runParallel = false
+	}
+
 	if runParallel {
 		// Get max concurrency from config
 		maxConcurrent := r.config.Runner().MaxConcurrent

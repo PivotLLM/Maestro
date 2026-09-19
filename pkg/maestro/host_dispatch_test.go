@@ -29,14 +29,19 @@ func (stubDispatcher) GetLLM(id string) *config.LLM        { return &config.LLM{
 func (stubDispatcher) GetExecInfo(string) *llm.LLMExecInfo { return &llm.LLMExecInfo{} }
 func (stubDispatcher) TestLLM(string) (bool, error)        { return true, nil }
 
-func registerProvider(t *testing.T, host any) []toolspec.ToolDefinition {
+func newPreparedConfig(t *testing.T) *config.Config {
 	t.Helper()
 	cfg := config.New(config.WithBaseDir(t.TempDir()), config.WithEmbeddedFS(EmbeddedReference))
 	if err := cfg.Prepare(); err != nil {
 		t.Fatalf("prepare config: %v", err)
 	}
+	return cfg
+}
+
+func registerProvider(t *testing.T, host any) []toolspec.ToolDefinition {
+	t.Helper()
 	p := &Provider{}
-	return p.RegisterTools(toolspec.Deps{Cfg: cfg, Host: host})
+	return p.RegisterTools(toolspec.Deps{Cfg: newPreparedConfig(t), Host: host})
 }
 
 func modelHintDescriptions(defs []toolspec.ToolDefinition, param string) map[string]string {

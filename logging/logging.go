@@ -7,6 +7,7 @@ package logging
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -50,6 +51,20 @@ func New(logPath string) (*Logger, error) {
 		level:   global.LogLevelInfo,
 		logFile: logFile,
 	}, nil
+}
+
+// NewWithWriter creates a logger that writes to w instead of a file, for
+// hosts that embed Maestro and route its log into their own logging. Lines
+// have the same format as the file logger:
+//
+//	YYYY-MM-DD HH:MM:SS [LEVEL] [pid] message
+//
+// Sync and Close are no-ops for a writer-backed logger.
+func NewWithWriter(w io.Writer) *Logger {
+	return &Logger{
+		logger: log.New(w, "", 0),
+		level:  global.LogLevelInfo,
+	}
 }
 
 // Sync flushes any buffered log data to disk

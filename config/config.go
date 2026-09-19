@@ -159,13 +159,24 @@ type Logging struct {
 
 // Runner represents runner configuration for automated task execution
 type Runner struct {
-	MaxConcurrent             int           `json:"max_concurrent,omitempty"`
+	MaxConcurrent int `json:"max_concurrent,omitempty"`
+	// AllowParallel controls whether a task set may run in parallel when the
+	// caller asks for it (task set `parallel` or task_run parallel="true").
+	// nil or true allows it; false forces sequential execution and logs why.
+	// Parallel execution is never the default: it must be requested per run.
+	AllowParallel             *bool         `json:"allow_parallel,omitempty"`
 	MaxRounds                 int           `json:"max_rounds,omitempty"`          // Max retry rounds per run (default: 5)
 	RoundDelaySeconds         int           `json:"round_delay_seconds,omitempty"` // Delay between processing rounds (default: 0)
 	Limits                    global.Limits `json:"limits,omitempty"`              // Default execution limits for tasks
 	RetryDelaySeconds         int           `json:"retry_delay_seconds,omitempty"`
 	RateLimit                 RateLimit     `json:"rate_limit,omitempty"`
 	DefaultDisclaimerTemplate string        `json:"default_disclaimer_template,omitempty"` // Default disclaimer file for reports
+}
+
+// ParallelAllowed reports whether parallel task execution may be honoured
+// when requested. Unset means allowed.
+func (r Runner) ParallelAllowed() bool {
+	return r.AllowParallel == nil || *r.AllowParallel
 }
 
 // RateLimit represents rate limiting configuration
@@ -209,6 +220,29 @@ func WithBaseDir(path string) Option {
 			c.data = &configData{}
 		}
 		c.data.BaseDir = path
+	}
+}
+
+// WithRunner sets the runner configuration programmatically, for hosts that
+// embed Maestro. Zero-valued fields keep Maestro's defaults (see Runner()).
+func WithRunner(r Runner) Option {
+	return func(c *Config) {
+		if c.data == nil {
+			c.data = &configData{}
+		}
+		c.data.Runner = r
+	}
+}
+
+// WithReferenceDirs sets external read-only reference directories
+// programmatically, for hosts that embed Maestro. Each entry is validated and
+// resolved by Prepare() exactly like a `reference_dirs` config entry.
+func WithReferenceDirs(dirs []ReferenceDir) Option {
+	return func(c *Config) {
+		if c.data == nil {
+			c.data = &configData{}
+		}
+		c.data.ReferenceDirs = append([]ReferenceDir(nil), dirs...)
 	}
 }
 

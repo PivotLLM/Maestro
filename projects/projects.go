@@ -27,7 +27,9 @@ import (
 type Service struct {
 	config       *config.Config
 	logger       *logging.Logger
-	projectMutex sync.Map // map[string]*sync.Mutex for per-project locking
+	projectMutex sync.Map
+	// importAllowed, when set, gates every path ImportFiles reads (see SetImportAllowed).
+	importAllowed func(absPath string) bool // map[string]*sync.Mutex for per-project locking
 }
 
 // ProjectInfo is returned by List operations
@@ -64,6 +66,30 @@ func NewService(cfg *config.Config, logger *logging.Logger) *Service {
 		logger:       logger,
 		projectMutex: sync.Map{},
 	}
+}
+
+// SetImportAllowed installs a predicate that ImportFiles consults for every
+// source path it would copy (after resolving symlinks). A host that embeds
+// Maestro uses it to confine imports to what its agent may already read. When
+// unset, imports may come from anywhere on the filesystem (standalone default).
+func (s *Service) SetImportAllowed(allowed func(absPath string) bool) {
+	s.importAllowed = allowed
+}
+
+// importPermitted applies the ImportAllowed predicate to the real path behind
+// p. With no predicate installed everything is permitted.
+func (s *Service) importPermitted(p string) bool {
+	if s.importAllowed == nil {
+		return true
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return false
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = real
+	}
+	return s.importAllowed(abs)
 }
 
 // getProjectMutex gets or creates a mutex for a specific project

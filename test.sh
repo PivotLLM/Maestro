@@ -52,6 +52,36 @@ MAESTRO="$SRC/maestro"
 CONFIG_TEMPLATE="$SRC/config-test.json"
 CONFIG="$SRC/.config-test-runtime.json"
 
+# Execution mode.
+#   stdio (default): build and drive the maestro binary directly over stdio.
+#   host:            drive Maestro embedded in a host (e.g. ClawEh) over the
+#                    host's MCP endpoint. Requires:
+#                      MCP_URL    the host's MCP endpoint (e.g. http://127.0.0.1:8080/mcp)
+#                      MCP_TOKEN  a bearer token for that endpoint
+#                      HOST_DATA  Maestro's base directory inside the host
+#                                 (the host's <workspace>/maestro), used for
+#                                 on-disk checks; it is never removed
+#                    Optional: TOOL_PREFIX (default "maestro_") as the host
+#                    namespaces Maestro's tools.
+#                    The host must run a deterministic model: a prompt containing
+#                    "[[FAIL]]" must make the model call fail, and prompts with
+#                    the "REQUIRED RESPONSE FORMAT" marker must get a JSON object.
+: "${MODE:=stdio}"
+if [ "$MODE" = "host" ]; then
+    : "${TOOL_PREFIX:=maestro_}"
+    if [ -z "$MCP_URL" ] || [ -z "$MCP_TOKEN" ] || [ -z "$HOST_DATA" ]; then
+        echo "ERROR: MODE=host requires MCP_URL, MCP_TOKEN and HOST_DATA to be set"
+        exit 1
+    fi
+    TEST_ROOT="$HOST_DATA"
+    TEST_DATA="$HOST_DATA"
+elif [ "$MODE" != "stdio" ]; then
+    echo "ERROR: MODE must be 'stdio' or 'host' (got '$MODE')"
+    exit 1
+else
+    TOOL_PREFIX=""
+fi
+
 # Parse command line arguments
 PRESERVE_TEST_DIR=false
 while getopts "x" opt; do
@@ -67,19 +97,21 @@ while getopts "x" opt; do
     esac
 done
 
-# Generate runtime config from template with platform-specific absolute paths
-# Use sed to replace placeholders with actual paths
-sed -e "s|MAESTRO_TEST_ROOT|$TEST_ROOT|g" \
-    -e "s|MAESTRO_TEST_DATA|$TEST_DATA|g" "$CONFIG_TEMPLATE" > "$CONFIG"
+if [ "$MODE" != "host" ]; then
+    # Generate runtime config from template with platform-specific absolute paths
+    # Use sed to replace placeholders with actual paths
+    sed -e "s|MAESTRO_TEST_ROOT|$TEST_ROOT|g" \
+        -e "s|MAESTRO_TEST_DATA|$TEST_DATA|g" "$CONFIG_TEMPLATE" > "$CONFIG"
 
-# Set environment variables - MAESTRO_CONFIG tells maestro which config file to use
-ENV="OPENAI_API_KEY=test,MAESTRO_CONFIG=$CONFIG"
+    # Set environment variables - MAESTRO_CONFIG tells maestro which config file to use
+    ENV="OPENAI_API_KEY=test,MAESTRO_CONFIG=$CONFIG"
 
-cd $SRC
+    cd $SRC
 
-# Always build
-rm -f "$MAESTRO"
-go build -o $MAESTRO
+    # Always build
+    rm -f "$MAESTRO"
+    go build -o $MAESTRO
+fi
 
 # Build only if binary doesn't exist
 #if [ ! -f "$MAESTRO" ]; then
@@ -154,28 +186,44 @@ if [ ! -x "$PROBE" ]; then
     exit 1
 fi
 
-# Check if MAESTRO exists
-if [ ! -f "$MAESTRO" ]; then
-    echo "${RED}ERROR: Maestro not found at: $MAESTRO${NC}"
-    echo "Please build Maestro first: go build -o $MAESTRO ."
-    exit 1
-fi
+if [ "$MODE" != "host" ]; then
+    # Check if MAESTRO exists
+    if [ ! -f "$MAESTRO" ]; then
+        echo "${RED}ERROR: Maestro not found at: $MAESTRO${NC}"
+        echo "Please build Maestro first: go build -o $MAESTRO ."
+        exit 1
+    fi
 
-# Check if MAESTRO is executable
-if [ ! -x "$MAESTRO" ]; then
-    echo "${RED}ERROR: Maestro is not executable: $MAESTRO${NC}"
-    echo "Run: chmod +x $MAESTRO"
-    exit 1
+    # Check if MAESTRO is executable
+    if [ ! -x "$MAESTRO" ]; then
+        echo "${RED}ERROR: Maestro is not executable: $MAESTRO${NC}"
+        echo "Run: chmod +x $MAESTRO"
+        exit 1
+    fi
 fi
 
 echo "${GREEN}Pre-flight checks passed${NC}"
 echo "  MCPProbe: $PROBE"
-echo "  Maestro: $MAESTRO"
+if [ "$MODE" = "host" ]; then
+    echo "  Mode: host ($MCP_URL, tool prefix '$TOOL_PREFIX', data $HOST_DATA)"
+else
+    echo "  Maestro: $MAESTRO"
+fi
 echo ""
 
 #===============================================================================
 # Helper Functions
 #===============================================================================
+
+# probe_call invokes one tool through MCPProbe in the current mode and prints
+# probe's combined output. Every tool call in this script goes through it.
+probe_call() {
+    if [ "$MODE" = "host" ]; then
+        $PROBE -url "$MCP_URL" -transport http -headers "Authorization:Bearer $MCP_TOKEN" -call "${TOOL_PREFIX}$1" -params "$2" 2>&1
+    else
+        $PROBE -stdio $MAESTRO -env $ENV -call "$1" -params "$2" 2>&1
+    fi
+}
 
 # Print section header
 print_section() {
@@ -200,7 +248,7 @@ run_test() {
     local expected="$4"
 
     echo "  ${test_name}"
-    result=$($PROBE -stdio $MAESTRO -env $ENV -call "$tool" -params "$params" 2>&1)
+    result=$(probe_call "$tool" "$params")
 
     if echo "$result" | grep -q "Tool call succeeded"; then
         if [ -n "$expected" ]; then
@@ -231,7 +279,7 @@ run_test_expect_fail() {
     local expected_error="$4"
 
     echo "  ${test_name}"
-    result=$($PROBE -stdio $MAESTRO -env $ENV -call "$tool" -params "$params" 2>&1)
+    result=$(probe_call "$tool" "$params")
 
     if echo "$result" | grep -q "Tool call failed"; then
         if [ -n "$expected_error" ]; then
@@ -261,7 +309,7 @@ run_test_capture() {
     local expected="$4"
 
     echo "  ${test_name}"
-    CAPTURED_RESULT=$($PROBE -stdio $MAESTRO -env $ENV -call "$tool" -params "$params" 2>&1)
+    CAPTURED_RESULT=$(probe_call "$tool" "$params")
 
     if echo "$CAPTURED_RESULT" | grep -q "Tool call succeeded"; then
         if [ -n "$expected" ]; then
@@ -286,7 +334,33 @@ run_test_capture() {
 
 # Silent cleanup (no output)
 cleanup_silent() {
-    $PROBE -stdio $MAESTRO -env $ENV -call "$1" -params "$2" > /dev/null 2>&1
+    probe_call "$1" "$2" > /dev/null 2>&1
+}
+
+# Run a test expecting success and the ABSENCE of a string in the output
+run_test_absent() {
+    local test_name="$1"
+    local tool="$2"
+    local params="$3"
+    local unexpected="$4"
+
+    echo "  ${test_name}"
+    result=$(probe_call "$tool" "$params")
+
+    if echo "$result" | grep -q "Tool call succeeded"; then
+        if echo "$result" | grep -q "$unexpected"; then
+            echo "    ${RED}FAIL${NC}: Unexpected '$unexpected' found"
+            echo "    Output: $result"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+        else
+            echo "    ${GREEN}PASS${NC}: '$unexpected' absent as expected"
+            PASS_COUNT=$((PASS_COUNT + 1))
+        fi
+    else
+        echo "    ${RED}FAIL${NC}: Tool call failed unexpectedly"
+        echo "    Output: $result"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
 }
 
 # Call a tool and return just the JSON result (for use in variable capture)
@@ -294,7 +368,7 @@ call_tool() {
     local tool="$1"
     local params="$2"
     # Extract the JSON line that follows "Tool call succeeded:"
-    $PROBE -stdio $MAESTRO -env $ENV -call "$tool" -params "$params" 2>&1 | grep -A2 "Tool call succeeded:" | grep "^{" | head -1
+    probe_call "$tool" "$params" | grep -A2 "Tool call succeeded:" | grep "^{" | head -1
 }
 
 #===============================================================================
@@ -303,21 +377,28 @@ call_tool() {
 
 print_section "SECTION 0: Fresh Start" "Testing directory creation from scratch"
 
-print_subsection "0.1 Clean Test Environment"
-echo "  0.1.1 Removing test directory: $TEST_ROOT"
-rm -rf "$TEST_ROOT"
-if [ -d "$TEST_ROOT" ]; then
-    echo "    ${RED}FAIL${NC}: Could not remove test directory"
-    FAIL_COUNT=$((FAIL_COUNT + 1))
-else
-    echo "    ${GREEN}PASS${NC}: Test directory removed"
+if [ "$MODE" = "host" ]; then
+    print_subsection "0.1 Host Data Directory"
+    echo "  0.1.1 Using the host's Maestro data directory (never removed): $TEST_ROOT"
+    echo "    ${GREEN}PASS${NC}: Host mode"
     PASS_COUNT=$((PASS_COUNT + 1))
+else
+    print_subsection "0.1 Clean Test Environment"
+    echo "  0.1.1 Removing test directory: $TEST_ROOT"
+    rm -rf "$TEST_ROOT"
+    if [ -d "$TEST_ROOT" ]; then
+        echo "    ${RED}FAIL${NC}: Could not remove test directory"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    else
+        echo "    ${GREEN}PASS${NC}: Test directory removed"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    fi
 fi
 
 print_subsection "0.2 Verify Directories Created on First Run"
 # Make a simple health check call to trigger directory creation
 echo "  0.2.1 Running health check to trigger directory creation"
-result=$($PROBE -stdio $MAESTRO -env $ENV -call "health" -params '{}' 2>&1)
+result=$(probe_call "health" '{}')
 if echo "$result" | grep -q "Tool call succeeded"; then
     echo "    ${GREEN}PASS${NC}: Health check succeeded"
     PASS_COUNT=$((PASS_COUNT + 1))
@@ -354,13 +435,19 @@ else
     FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 
-echo "  0.2.5 Verify log file location is outside chroot (in base_dir)"
-if [ -f "$TEST_ROOT/maestro.log" ]; then
-    echo "    ${GREEN}PASS${NC}: Log file created in base_dir (outside chroot)"
+if [ "$MODE" = "host" ]; then
+    echo "  0.2.5 Log file is owned by the host (no maestro.log expected)"
+    echo "    ${GREEN}PASS${NC}: Host mode"
     PASS_COUNT=$((PASS_COUNT + 1))
 else
-    echo "    ${YELLOW}WARN${NC}: Log file not found (may be created on first log)"
-    PASS_COUNT=$((PASS_COUNT + 1))
+    echo "  0.2.5 Verify log file location is outside chroot (in base_dir)"
+    if [ -f "$TEST_ROOT/maestro.log" ]; then
+        echo "    ${GREEN}PASS${NC}: Log file created in base_dir (outside chroot)"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    else
+        echo "    ${YELLOW}WARN${NC}: Log file not found (may be created on first log)"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    fi
 fi
 
 #===============================================================================
@@ -1387,7 +1474,7 @@ run_test_expect_fail "6.2.5 Create task in non-existent task set" \
 # Extract task UUIDs for further tests
 print_subsection "6.3 List and Get Tasks"
 echo "  6.3.0 Extracting task UUIDs for further tests"
-TASK_LIST_RESULT=$($PROBE -stdio $MAESTRO -env $ENV -call "task_list" -params "{\"project\":\"$TEST_PROJECT\",\"path\":\"analysis\"}" 2>&1)
+TASK_LIST_RESULT=$(probe_call "task_list" "{\"project\":\"$TEST_PROJECT\",\"path\":\"analysis\"}")
 TASK_UUID_1=$(echo "$TASK_LIST_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
 TASK_UUID_2=$(echo "$TASK_LIST_RESULT" | grep -o '"uuid":"[^"]*"' | head -2 | tail -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
 
@@ -1620,6 +1707,23 @@ run_test "7.6.3 Delete remaining task set" \
 
 print_section "SECTION 8: LLM Operations" "Tools: llm_list, llm_dispatch"
 
+if [ "$MODE" = "host" ]; then
+print_subsection "8.0 LLM tools are not exposed under a host"
+run_test_expect_fail "8.0.1 llm_list is absent" \
+    "llm_list" \
+    '{}' \
+    ""
+
+run_test_expect_fail "8.0.2 llm_dispatch is absent" \
+    "llm_dispatch" \
+    '{"llm_id":"default","prompt":"Say hello."}' \
+    ""
+
+run_test_expect_fail "8.0.3 llm_test is absent" \
+    "llm_test" \
+    '{"llm_id":"default"}' \
+    ""
+else
 print_subsection "8.1 List LLMs"
 run_test "8.1.1 List configured LLMs" \
     "llm_list" \
@@ -1646,6 +1750,7 @@ run_test_expect_fail "8.2.3 Dispatch with empty prompt" \
     "llm_dispatch" \
     '{"llm_id":"default","prompt":""}' \
     ""
+fi
 
 #===============================================================================
 # SECTION 9: System Tools
@@ -1669,6 +1774,13 @@ run_test "9.0.3 start_here returns path" \
     '{}' \
     '"path"'
 
+if [ "$MODE" = "host" ]; then
+run_test "9.0.4 start_here carries host-mode guidance" \
+    "start_here" \
+    '{}' \
+    'host-dispatched'
+fi
+
 print_subsection "9.1 Health Check"
 run_test "9.1.1 Health check returns status" \
     "health" \
@@ -1680,6 +1792,17 @@ run_test "9.1.2 Health check returns base_dir" \
     '{}' \
     '"base_dir"'
 
+if [ "$MODE" = "host" ]; then
+run_test "9.1.3 Health check reports host dispatch" \
+    "health" \
+    '{}' \
+    '"dispatch":"host"'
+
+run_test_absent "9.1.4 Health check omits enabled_llms under a host" \
+    "health" \
+    '{}' \
+    '"enabled_llms"'
+else
 run_test "9.1.3 Health check returns config_path" \
     "health" \
     '{}' \
@@ -1689,6 +1812,7 @@ run_test "9.1.4 Health check returns enabled_llms" \
     "health" \
     '{}' \
     '"enabled_llms"'
+fi
 
 run_test "9.1.5 Health check returns healthy field" \
     "health" \
@@ -2445,7 +2569,7 @@ run_test_expect_fail "13.4.3 Error - update non-existent taskset" \
 print_subsection "13.5 task_create"
 
 echo "  13.5.0 Creating task to capture UUID"
-TASK_CAPTURE_RESULT=$($PROBE -stdio $MAESTRO -env $ENV -call "task_create" -params "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Dispatch Test Task\",\"type\":\"test\",\"prompt\":\"Test dispatch prompt\"}" 2>&1)
+TASK_CAPTURE_RESULT=$(probe_call "task_create" "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Dispatch Test Task\",\"type\":\"test\",\"prompt\":\"Test dispatch prompt\"}")
 if echo "$TASK_CAPTURE_RESULT" | grep -q "Tool call succeeded"; then
     TEST_TASK_UUID=$(echo "$TASK_CAPTURE_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
     if [ -n "$TEST_TASK_UUID" ]; then
@@ -2622,10 +2746,18 @@ run_test "13.1.2 Create taskset for success test" \
     "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"success-test\",\"title\":\"Success Test\",\"worker_response_template\":\"$TEST_PLAYBOOK/templates/worker-response.json\",\"worker_report_template\":\"$TEST_PLAYBOOK/templates/worker-report.md\"}" \
     '"path":"success-test"'
 
+if [ "$MODE" = "host" ]; then
+# Under a host the model is the host agent's default; no llm_model_id.
+run_test "13.1.3 Create task on the host default model" \
+    "task_create" \
+    "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"success-test\",\"title\":\"Test Success\",\"type\":\"test\",\"prompt\":\"Test prompt\"}" \
+    '"title":"Test Success"'
+else
 run_test "13.1.3 Create task with test-success LLM" \
     "task_create" \
     "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"success-test\",\"title\":\"Test Success\",\"type\":\"test\",\"llm_model_id\":\"test-success\",\"prompt\":\"Test prompt\"}" \
     '"title":"Test Success"'
+fi
 
 print_subsection "13.2 Run Success Task and Verify History"
 
@@ -2671,10 +2803,18 @@ run_test "13.3.1 Create taskset for stderr test" \
     "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\",\"title\":\"Stderr Test\",\"worker_response_template\":\"$TEST_PLAYBOOK/templates/worker-response.json\",\"worker_report_template\":\"$TEST_PLAYBOOK/templates/worker-report.md\"}" \
     '"path":"stderr-test"'
 
+if [ "$MODE" = "host" ]; then
+# The host's test model fails any prompt carrying the [[FAIL]] marker.
+run_test "13.3.2 Create task whose model call fails" \
+    "task_create" \
+    "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\",\"title\":\"Test Stderr\",\"type\":\"test\",\"prompt\":\"[[FAIL]] Test prompt\"}" \
+    '"title":"Test Stderr"'
+else
 run_test "13.3.2 Create task with test-stderr LLM" \
     "task_create" \
     "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\",\"title\":\"Test Stderr\",\"type\":\"test\",\"llm_model_id\":\"test-stderr\",\"prompt\":\"Test prompt\"}" \
     '"title":"Test Stderr"'
+fi
 
 STDERR_RUN_RESULT=$(call_tool "task_run" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\"}")
 echo "  13.3.3 Run stderr task"
@@ -2699,7 +2839,16 @@ for i in $(seq 1 90); do
     [ "$STDERR_STATUS" = "failed" ] || [ "$STDERR_STATUS" = "done" ] && break
     sleep 1
 done
-if [ "$STDERR_STATUS" = "failed" ] && echo "$STDERR_ERROR" | grep -q "stderr error message"; then
+if [ "$MODE" = "host" ]; then
+    # A host run has no stderr; the model failure must still land in the task error.
+    if [ "$STDERR_STATUS" = "failed" ] && [ -n "$STDERR_ERROR" ]; then
+        echo "    ${GREEN}PASS${NC}: Task failed with the model error recorded: '$STDERR_ERROR'"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    else
+        echo "    ${RED}FAIL${NC}: Expected status=failed with a recorded error, got status=$STDERR_STATUS, error='$STDERR_ERROR'"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+elif [ "$STDERR_STATUS" = "failed" ] && echo "$STDERR_ERROR" | grep -q "stderr error message"; then
     echo "    ${GREEN}PASS${NC}: Task failed with stderr captured: '$STDERR_ERROR'"
     PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -2717,6 +2866,43 @@ run_test "13.4.1 Create taskset for disabled LLM test" \
     "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"disabled-llm-test\",\"title\":\"Disabled LLM Test\",\"worker_response_template\":\"$TEST_PLAYBOOK/templates/worker-response.json\",\"worker_report_template\":\"$TEST_PLAYBOOK/templates/worker-report.md\"}" \
     '"path":"disabled-llm-test"'
 
+if [ "$MODE" = "host" ]; then
+# Under a host an unknown model alias is a permanent failure: the task runs once
+# and is failed immediately, without retries.
+run_test "13.4.2 Create task with an unknown host model alias" \
+    "task_create" \
+    "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"disabled-llm-test\",\"title\":\"Test Disabled LLM\",\"type\":\"test\",\"llm_model_id\":\"no-such-model-alias\",\"prompt\":\"Test prompt\"}" \
+    '"title":"Test Disabled LLM"'
+
+DISABLED_RUN_RESULT=$(call_tool "task_run" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"disabled-llm-test\"}")
+echo "  13.4.3 Verify the unknown-alias task fails permanently"
+DISABLED_TASK_STATUS=""
+DISABLED_TASK_ERROR=""
+for i in $(seq 1 90); do
+    DISABLED_TASK_RESULT=$(call_tool "task_list" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"disabled-llm-test\"}")
+    DISABLED_TASK_STATUS=$(echo "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
+    DISABLED_TASK_ERROR=$(echo "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.error // empty')
+    [ "$DISABLED_TASK_STATUS" = "failed" ] || [ "$DISABLED_TASK_STATUS" = "done" ] && break
+    sleep 1
+done
+if [ "$DISABLED_TASK_STATUS" = "failed" ] && echo "$DISABLED_TASK_ERROR" | grep -q "permanent"; then
+    echo "    ${GREEN}PASS${NC}: Task failed permanently: '$DISABLED_TASK_ERROR'"
+    PASS_COUNT=$((PASS_COUNT + 1))
+else
+    echo "    ${RED}FAIL${NC}: Expected status=failed with a permanent error, got status=$DISABLED_TASK_STATUS, error='$DISABLED_TASK_ERROR'"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
+echo "  13.4.4 Verify the unknown-alias task was not retried"
+DISABLED_INVOCATIONS=$(echo "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.invocations // 0')
+if [ "$DISABLED_INVOCATIONS" = "1" ]; then
+    echo "    ${GREEN}PASS${NC}: invocations=1"
+    PASS_COUNT=$((PASS_COUNT + 1))
+else
+    echo "    ${RED}FAIL${NC}: Expected invocations=1, got $DISABLED_INVOCATIONS"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+else
 run_test "13.4.2 Create task with disabled LLM" \
     "task_create" \
     "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"disabled-llm-test\",\"title\":\"Test Disabled LLM\",\"type\":\"test\",\"llm_model_id\":\"test-infra-fail\",\"prompt\":\"Test prompt\"}" \
@@ -2746,6 +2932,7 @@ if [ "$DISABLED_TASK_STATUS" = "waiting" ]; then
 else
     echo "    ${RED}FAIL${NC}: Expected status=waiting, got status=$DISABLED_TASK_STATUS"
     FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
 fi
 
 # Only cleanup LLM test project if not preserving test directory
@@ -2946,7 +3133,7 @@ run_test "14.8.2 Create task for supervisor test" \
     '"title":"Supervisor Task"'
 
 # Get the task UUID for supervisor_update
-SUPERVISOR_TASK_RESULT=$($PROBE -stdio $MAESTRO -env $ENV -call "task_list" -params "{\"project\":\"$TEST_PROJECT\",\"path\":\"supervisor-test\"}" 2>&1)
+SUPERVISOR_TASK_RESULT=$(probe_call "task_list" "{\"project\":\"$TEST_PROJECT\",\"path\":\"supervisor-test\"}")
 SUPERVISOR_TASK_UUID=$(echo "$SUPERVISOR_TASK_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
 
 if [ -n "$SUPERVISOR_TASK_UUID" ]; then
@@ -3054,8 +3241,11 @@ echo "Passed:      ${GREEN}$PASS_COUNT${NC}"
 echo "Failed:      ${RED}$FAIL_COUNT${NC}"
 echo ""
 
-# Cleanup or preserve test directory
-if [ "$PRESERVE_TEST_DIR" = true ]; then
+# Cleanup or preserve test directory (a host's data directory is never removed)
+if [ "$MODE" = "host" ]; then
+    echo "${CYAN}Host data directory left in place: $TEST_ROOT${NC}"
+    echo ""
+elif [ "$PRESERVE_TEST_DIR" = true ]; then
     echo "${CYAN}Test directory preserved: $TEST_ROOT${NC}"
     echo ""
 else
