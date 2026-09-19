@@ -77,3 +77,40 @@ func TestHostDeps_NoImportAllowed_StandaloneWording(t *testing.T) {
 		t.Errorf("standalone file_import source description changed: %q", desc)
 	}
 }
+
+// TestHostDeps_ImportAllowed_RefusedCountSurfaced: entries the host refuses
+// inside a directory import are reported to the caller as files_refused.
+func TestHostDeps_ImportAllowed_RefusedCountSurfaced(t *testing.T) {
+	allowed := t.TempDir()
+	p := &Provider{}
+	p.RegisterTools(toolspec.Deps{Cfg: newPreparedConfig(t), Host: HostDeps{
+		Dispatcher:    stubDispatcher{},
+		ImportAllowed: func(abs string) bool { return strings.HasPrefix(abs, allowed+string(os.PathSeparator)) },
+	}})
+	if _, err := p.projects.Create("imp", "Import", "", "", "", "none"); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	dir := filepath.Join(allowed, "docs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ok.md"), []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("s"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "leak")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	res, err := p.handleFileImport(&toolspec.ToolCall{Args: map[string]any{"project": "imp", "source": dir, "recursive": true}})
+	if err != nil || res.IsError {
+		t.Fatalf("import: res=%+v err=%v", res, err)
+	}
+	for _, want := range []string{`"files_imported":1`, `"files_refused":1`} {
+		if !strings.Contains(res.ForLLM, want) {
+			t.Errorf("result lacks %s: %s", want, res.ForLLM)
+		}
+	}
+}
