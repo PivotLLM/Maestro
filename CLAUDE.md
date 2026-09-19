@@ -100,31 +100,26 @@ Configuration defines:
 
 ## Development Commands
 
+The Makefile is the interface (see `~/.claude/standards/makefile.md`):
+
 ```bash
-# Build the server
-go build -o bin/maestro .
+make            # run the full test suite, then build ./maestro (only if tests pass)
+make test       # the one gate: go vet, go test -race -count=1, and ./test.sh (451 MCP checks)
+make build      # build ./maestro at the project root, no tests
+make clean      # remove ./maestro, test artifacts and the Go test cache
+make install    # install ./maestro: /usr/local/bin as root, otherwise ~/bin (must exist)
+make fmt / vet / lint
 
 # Run with custom config
-./bin/maestro --config ./example-config.json
+./maestro --config ./example-config.json
 
-# Run tests
-go test ./...
-
-# Format code
-go fmt ./...
-
-# Vet code
-go vet ./...
-
-# Install dependencies
-go mod tidy
-
-# Show version
-./bin/maestro --version
-
-# Show help
-./bin/maestro --help
+# Show version / help
+./maestro --version
+./maestro --help
 ```
+
+`make test` needs `probe` (MCPProbe), `jq` and `zip` on `PATH`; `make lint` needs
+`golangci-lint` (rebuild it with `go install ...@<version>` after a Go upgrade).
 
 ## Testing Strategy
 
@@ -165,9 +160,9 @@ The system is designed for LLMs to:
 - String constants should be defined in global package to avoid typos
 - Error handling must map to appropriate MCP error codes
 - Backward compatibility is not required for any aspect of Maestro. This is unreleased code and should be clean. No legacy code, no backwards compat. We want to arrive a nice clean well-implemented product we are proud of.
-- Always compile maestro and use the test script. If you are compiling it into bin, make sure the test script is using the binary you think it is. My preference is to compile to the project route instead of the bin directory since there is only one binary.
+- Always compile maestro and use the test script: `make test` does both. The binary is built at the project root (`./maestro`), never in `bin/`; `test.sh` builds and uses that binary.
 - DO NOT kill running Maestro instances - they are likely in use by a MCP client.
-- Always run test.sh after code changes
+- Always run `make test` after code changes
 - **NEVER delete test projects** until the user has had an opportunity to examine the files. Test projects contain valuable data for debugging and verification.
 
 ### STDIO MCP Server Architecture
