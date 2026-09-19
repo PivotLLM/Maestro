@@ -25,7 +25,7 @@ func newImportTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatalf("logger: %v", err)
 	}
-	t.Cleanup(func() { lg.Close() })
+	t.Cleanup(func() { _ = lg.Close() })
 	svc := NewService(cfg, lg)
 	if _, err := svc.Create("imp", "Import", "", "", "", "none"); err != nil {
 		t.Fatalf("create project: %v", err)
