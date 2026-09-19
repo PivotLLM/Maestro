@@ -747,7 +747,9 @@ func TestBuildReportQAFeedbackExtraction(t *testing.T) {
 		},
 	}
 	resultBytes, _ := json.Marshal(resultData)
-	os.WriteFile(filepath.Join(resultsDir, "uuid-feedback.json"), resultBytes, 0644)
+	if err := os.WriteFile(filepath.Join(resultsDir, "uuid-feedback.json"), resultBytes, 0644); err != nil {
+		t.Fatalf("write result: %v", err)
+	}
 
 	taskSets := []*global.TaskSet{
 		{
@@ -792,7 +794,9 @@ func TestBuildReportQANotesExtraction(t *testing.T) {
 		QA:     &global.QAResult{Response: `{"qa_verdict": "Pass", "notes": "Some notes here"}`},
 	}
 	resultBytes, _ := json.Marshal(resultData)
-	os.WriteFile(filepath.Join(resultsDir, "uuid-notes.json"), resultBytes, 0644)
+	if err := os.WriteFile(filepath.Join(resultsDir, "uuid-notes.json"), resultBytes, 0644); err != nil {
+		t.Fatalf("write result: %v", err)
+	}
 
 	taskSets := []*global.TaskSet{
 		{
@@ -829,7 +833,9 @@ func TestBuildReportQACommentsExtraction(t *testing.T) {
 		QA:     &global.QAResult{Response: `{"qa_verdict": "Pass", "comments": "Reviewer comments"}`},
 	}
 	resultBytes, _ := json.Marshal(resultData)
-	os.WriteFile(filepath.Join(resultsDir, "uuid-comments.json"), resultBytes, 0644)
+	if err := os.WriteFile(filepath.Join(resultsDir, "uuid-comments.json"), resultBytes, 0644); err != nil {
+		t.Fatalf("write result: %v", err)
+	}
 
 	taskSets := []*global.TaskSet{
 		{
@@ -869,7 +875,9 @@ func TestBuildReportQAFeedbackPriority(t *testing.T) {
 		},
 	}
 	resultBytes, _ := json.Marshal(resultData)
-	os.WriteFile(filepath.Join(resultsDir, "uuid-priority.json"), resultBytes, 0644)
+	if err := os.WriteFile(filepath.Join(resultsDir, "uuid-priority.json"), resultBytes, 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
 
 	taskSets := []*global.TaskSet{
 		{
@@ -912,7 +920,9 @@ func TestBuildReportQAIssuesExtraction(t *testing.T) {
 		},
 	}
 	resultBytes, _ := json.Marshal(resultData)
-	os.WriteFile(filepath.Join(resultsDir, "uuid-issues.json"), resultBytes, 0644)
+	if err := os.WriteFile(filepath.Join(resultsDir, "uuid-issues.json"), resultBytes, 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
 
 	taskSets := []*global.TaskSet{
 		{
@@ -956,7 +966,9 @@ func TestBuildReportQAIssuesEmptyArray(t *testing.T) {
 		QA:     &global.QAResult{Response: `{"qa_verdict": "Pass", "issues": []}`},
 	}
 	resultBytes, _ := json.Marshal(resultData)
-	os.WriteFile(filepath.Join(resultsDir, "uuid-empty-issues.json"), resultBytes, 0644)
+	if err := os.WriteFile(filepath.Join(resultsDir, "uuid-empty-issues.json"), resultBytes, 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
 
 	taskSets := []*global.TaskSet{
 		{
@@ -993,7 +1005,9 @@ func TestBuildReportQANoIssuesField(t *testing.T) {
 		QA:     &global.QAResult{Response: `{"qa_verdict": "Pass", "feedback": "Looks good"}`},
 	}
 	resultBytes, _ := json.Marshal(resultData)
-	os.WriteFile(filepath.Join(resultsDir, "uuid-no-issues.json"), resultBytes, 0644)
+	if err := os.WriteFile(filepath.Join(resultsDir, "uuid-no-issues.json"), resultBytes, 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
 
 	taskSets := []*global.TaskSet{
 		{
@@ -1014,7 +1028,7 @@ func TestBuildReportQANoIssuesField(t *testing.T) {
 	report := r.BuildReport("test", taskSets, nil, resultsDir)
 	task := report.TaskSets[0].Tasks[0]
 
-	if task.QAIssues != nil && len(task.QAIssues) != 0 {
+	if len(task.QAIssues) != 0 {
 		t.Errorf("expected nil or empty issues, got %v", task.QAIssues)
 	}
 }

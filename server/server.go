@@ -105,43 +105,6 @@ func New(cfg *config.Config, logger *logging.Logger) (*Server, error) {
 	return srv, nil
 }
 
-// readOnlyTool creates a tool with read-only annotations
-// ReadOnly: true, Destructive: false, OpenWorld: false
-func (s *Server) readOnlyTool(name string, opts ...mcp.ToolOption) mcp.Tool {
-	opts = append(opts, mcp.WithToolAnnotation(mcp.ToolAnnotation{
-		ReadOnlyHint:    mcp.ToBoolPtr(true),
-		DestructiveHint: mcp.ToBoolPtr(false),
-		OpenWorldHint:   mcp.ToBoolPtr(false),
-	}))
-	return mcp.NewTool(name, opts...)
-}
-
-// defaultTool creates a tool with default annotations (non-destructive)
-// ReadOnly: false, Destructive: false, OpenWorld: false
-func (s *Server) defaultTool(name string, opts ...mcp.ToolOption) mcp.Tool {
-	opts = append(opts, mcp.WithToolAnnotation(mcp.ToolAnnotation{
-		ReadOnlyHint:    mcp.ToBoolPtr(false),
-		DestructiveHint: mcp.ToBoolPtr(false),
-		OpenWorldHint:   mcp.ToBoolPtr(false),
-	}))
-	return mcp.NewTool(name, opts...)
-}
-
-// destructiveTool creates a tool with destructive annotations
-// ReadOnly: false, Destructive: true (unless markNonDestructive config is set), OpenWorld: false
-func (s *Server) destructiveTool(name string, opts ...mcp.ToolOption) mcp.Tool {
-	destructive := true
-	if s.markNonDestructive {
-		destructive = false
-	}
-	opts = append(opts, mcp.WithToolAnnotation(mcp.ToolAnnotation{
-		ReadOnlyHint:    mcp.ToBoolPtr(false),
-		DestructiveHint: mcp.ToBoolPtr(destructive),
-		OpenWorldHint:   mcp.ToBoolPtr(false),
-	}))
-	return mcp.NewTool(name, opts...)
-}
-
 func (s *Server) registerTools() error {
 	provider := &maestro.Provider{}
 	deps := toolspec.Deps{

@@ -89,7 +89,7 @@ func setupTestRunner(t *testing.T) (*testRunner, string) {
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	// Convert config reference dirs to reference service format
 	var externalDirs []reference.ExternalDir
@@ -163,7 +163,7 @@ func createTestTemplates(t *testing.T, tmpDir string) *global.DefaultTemplates {
 
 func TestGetTaskStatus(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -246,7 +246,7 @@ func TestGetTaskStatus(t *testing.T) {
 
 func TestGetTaskStatusWithTypeFilter(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -320,7 +320,7 @@ func TestGetTaskStatusWithTypeFilter(t *testing.T) {
 
 func TestRunReturnsImmediately(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -380,7 +380,7 @@ func TestRunReturnsImmediately(t *testing.T) {
 
 func TestRunConcurrencyPrevention(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -441,7 +441,7 @@ func TestRunConcurrencyPrevention(t *testing.T) {
 
 func TestGetTaskStatusShowsRunInProgress(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -512,7 +512,7 @@ func TestGetTaskStatusShowsRunInProgress(t *testing.T) {
 
 func TestCreateTaskRequiresPromptField(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -577,7 +577,7 @@ func TestCreateTaskRequiresPromptField(t *testing.T) {
 
 func TestRunDispatch_ProjectNotFound(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	req := &DispatchRequest{
 		Project: "nonexistent-project",
@@ -595,7 +595,7 @@ func TestRunDispatch_ProjectNotFound(t *testing.T) {
 
 func TestRunDispatch_NoPrompt(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -623,7 +623,7 @@ func TestRunDispatch_NoPrompt(t *testing.T) {
 
 func TestCreateTaskSetWithSkipValidation(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -653,7 +653,7 @@ func TestCreateTaskSetWithSkipValidation(t *testing.T) {
 
 func TestCreateTaskSetWithCallback(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 
@@ -688,7 +688,7 @@ func TestCreateTaskSetWithCallback(t *testing.T) {
 
 func TestUpdateTaskSetSkipValidation(t *testing.T) {
 	runner, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "test-project"
 

@@ -162,7 +162,7 @@ func TestDispatch_NoLLMsEnabled(t *testing.T) {
 		"enabled": false
 	}`
 	runner, tmpDir := setupTestRunnerWithLLMConfig(t, llmsJSON, "")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	rec := newCallbackRecorder()
 
@@ -268,7 +268,7 @@ func TestDispatch_BuildPromptFailure(t *testing.T) {
 		"enabled": true
 	}`
 	runner, tmpDir := setupTestRunnerWithLLMConfig(t, llmsJSON, "test-llm")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	rec := newCallbackRecorder()
 
@@ -343,7 +343,7 @@ func TestDispatch_SuccessCallback(t *testing.T) {
 		"enabled": true
 	}`
 	runner, tmpDir := setupTestRunnerWithLLMConfig(t, llmsJSON, "test-llm")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	rec := newCallbackRecorder()
 
@@ -408,7 +408,7 @@ func TestDispatch_GetTaskFailureAfterCreate(t *testing.T) {
 		"enabled": true
 	}`
 	runner, tmpDir := setupTestRunnerWithLLMConfig(t, llmsJSON, "test-llm")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	rec := newCallbackRecorder()
 

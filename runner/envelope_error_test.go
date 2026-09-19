@@ -131,7 +131,7 @@ func runEnvelopeGateCase(t *testing.T, c envelopeRunnerCase) {
 	if err != nil {
 		t.Fatalf("mkdtemp: %v", err)
 	}
-	defer os.RemoveAll(scriptDir)
+	defer func() { _ = os.RemoveAll(scriptDir) }()
 	scriptPath := filepath.Join(scriptDir, "emit.sh")
 	script := "#!/bin/sh\ncat >/dev/null\ncat <<'__ENVELOPE_EOF__'\n" + c.envelopeJSON + "\n__ENVELOPE_EOF__\n"
 	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
@@ -152,7 +152,7 @@ func runEnvelopeGateCase(t *testing.T, c envelopeRunnerCase) {
 		t.Fatalf("marshal llm config: %v", err)
 	}
 	tr, tmpDir := setupTestRunnerWithLLMConfig(t, string(llmsJSON), "envelope-llm")
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	projectName := "envelope-test"
 	if _, err := tr.projects.Create(projectName, "Envelope Test", "envelope gate", "", "", "none"); err != nil {
@@ -179,7 +179,7 @@ func runEnvelopeGateCase(t *testing.T, c envelopeRunnerCase) {
 	if _, err := tr.Run(context.Background(), &global.RunRequest{Project: projectName}, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	tr.Runner.Wait()
+	tr.Wait()
 
 	// Wait briefly for any post-Run goroutine to settle on disk.
 	deadline := time.Now().Add(3 * time.Second)
@@ -252,7 +252,7 @@ func runEnvelopeGateCase(t *testing.T, c envelopeRunnerCase) {
 // must carry the new resource accounting fields.
 func TestRecordHistoryResponse_PopulatesResourceFields(t *testing.T) {
 	tr, tmpDir := setupTestRunner(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	result := &llm.DispatchResult{
 		ExitCode:            0,
@@ -275,9 +275,9 @@ func TestRecordHistoryResponse_PopulatesResourceFields(t *testing.T) {
 		Success:             true,
 	}
 
-	tr.Runner.recordHistoryResponse("test-uuid", "worker", result, "test-llm", 1)
+	tr.recordHistoryResponse("test-uuid", "worker", result, "test-llm", 1)
 
-	historyAny, _ := tr.Runner.taskHistory.Load("test-uuid")
+	historyAny, _ := tr.taskHistory.Load("test-uuid")
 	if historyAny == nil {
 		t.Fatalf("expected history entry, got nil")
 	}

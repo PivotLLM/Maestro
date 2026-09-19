@@ -358,7 +358,7 @@ func (p *Provider) handleTaskCreate(call *toolspec.ToolCall) (*toolspec.Result, 
 	}
 	if qaEnabled && qaInstructionsFile != "" {
 		if err := p.validateInstructionsFile(project, qaInstructionsFile, qaInstructionsFileSource); err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("QA %s", err.Error())), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("QA %s", err.Error()), IsError: true}, nil
 		}
 	}
 
@@ -440,7 +440,7 @@ func (p *Provider) handleTaskGet(call *toolspec.ToolCall) (*toolspec.Result, err
 		return createJSONResult(result)
 	}
 
-	return &toolspec.Result{ForLLM: fmt.Sprint("either uuid or (path and id) is required"), IsError: true}, nil
+	return &toolspec.Result{ForLLM: "either uuid or (path and id) is required", IsError: true}, nil
 }
 
 // handleTaskList handles the task_list MCP tool
@@ -505,7 +505,7 @@ func (p *Provider) handleTaskUpdate(call *toolspec.ToolCall) (*toolspec.Result, 
 	}
 	if qaInstructionsFile != "" {
 		if err := p.validateInstructionsFile(project, qaInstructionsFile, qaInstructionsFileSource); err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("QA %s", err.Error())), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("QA %s", err.Error()), IsError: true}, nil
 		}
 	}
 

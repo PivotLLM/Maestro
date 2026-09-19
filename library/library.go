@@ -22,7 +22,6 @@ import (
 
 // Service provides library operations
 type Service struct {
-	config     *config.Config
 	logger     *logging.Logger
 	categories map[string]*config.Category
 	pathMutex  sync.Map // map[string]*sync.Mutex for per-path locking

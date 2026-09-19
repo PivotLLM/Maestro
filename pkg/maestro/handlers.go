@@ -34,7 +34,7 @@ func (p *Provider) handleProjectCreate(call *toolspec.ToolCall) (*toolspec.Resul
 		return nil, fmt.Errorf("%s", "title parameter is required")
 	}
 	if disclaimerTemplate == "" {
-		return &toolspec.Result{ForLLM: fmt.Sprint("disclaimer_template parameter is required: provide a playbook path (e.g., 'playbook-name/templates/disclaimer.md') or 'none'"), IsError: true}, nil
+		return &toolspec.Result{ForLLM: "disclaimer_template parameter is required: provide a playbook path (e.g., 'playbook-name/templates/disclaimer.md') or 'none'", IsError: true}, nil
 	}
 
 	proj, err := p.projects.Create(name, title, description, projectContext, status, disclaimerTemplate)

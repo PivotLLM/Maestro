@@ -131,7 +131,7 @@ func templateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
-		"title": strings.Title,
+		"title": global.Title,
 		"json": func(v interface{}) string {
 			data, err := json.MarshalIndent(v, "", "  ")
 			if err != nil {
@@ -664,19 +664,19 @@ func (r *Reporter) GenerateHierarchicalMarkdown(report *ProjectReport) (string, 
 
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# Project Report: %s\n\n", report.Project))
-	sb.WriteString(fmt.Sprintf("**Generated**: %s\n\n", report.GeneratedAt.Format("2006-01-02 15:04:05")))
+	fmt.Fprintf(&sb, "# Project Report: %s\n\n", report.Project)
+	fmt.Fprintf(&sb, "**Generated**: %s\n\n", report.GeneratedAt.Format("2006-01-02 15:04:05"))
 
 	// Summary
 	sb.WriteString("## Summary\n\n")
-	sb.WriteString(fmt.Sprintf("- **Total Tasks**: %d\n", report.Summary.TotalTasks))
-	sb.WriteString(fmt.Sprintf("- **Completed**: %d\n", report.Summary.CompletedTasks))
-	sb.WriteString(fmt.Sprintf("- **Failed**: %d\n", report.Summary.FailedTasks))
-	sb.WriteString(fmt.Sprintf("- **Pending**: %d\n", report.Summary.PendingTasks))
+	fmt.Fprintf(&sb, "- **Total Tasks**: %d\n", report.Summary.TotalTasks)
+	fmt.Fprintf(&sb, "- **Completed**: %d\n", report.Summary.CompletedTasks)
+	fmt.Fprintf(&sb, "- **Failed**: %d\n", report.Summary.FailedTasks)
+	fmt.Fprintf(&sb, "- **Pending**: %d\n", report.Summary.PendingTasks)
 
 	if report.Summary.QAPassedTasks > 0 || report.Summary.QAFailedTasks > 0 {
-		sb.WriteString(fmt.Sprintf("- **QA Passed**: %d\n", report.Summary.QAPassedTasks))
-		sb.WriteString(fmt.Sprintf("- **QA Failed**: %d\n", report.Summary.QAFailedTasks))
+		fmt.Fprintf(&sb, "- **QA Passed**: %d\n", report.Summary.QAPassedTasks)
+		fmt.Fprintf(&sb, "- **QA Failed**: %d\n", report.Summary.QAFailedTasks)
 	}
 
 	sb.WriteString("\n---\n\n")
@@ -690,27 +690,27 @@ func (r *Reporter) GenerateHierarchicalMarkdown(report *ProjectReport) (string, 
 		singleFlatTaskSet := len(taskSets) == 1 && taskSets[0].Path == prefix
 
 		if !singleFlatTaskSet && prefix != "" {
-			sb.WriteString(fmt.Sprintf("## %s\n\n", strings.Title(prefix)))
+			fmt.Fprintf(&sb, "## %s\n\n", global.Title(prefix))
 		}
 
 		for _, ts := range taskSets {
 			if singleFlatTaskSet {
 				// Use task set title as H2 directly
-				sb.WriteString(fmt.Sprintf("## %s\n\n", ts.Title))
+				fmt.Fprintf(&sb, "## %s\n\n", ts.Title)
 			} else {
-				sb.WriteString(fmt.Sprintf("### %s\n\n", ts.Title))
+				fmt.Fprintf(&sb, "### %s\n\n", ts.Title)
 			}
 
 			if ts.Description != "" {
-				sb.WriteString(fmt.Sprintf("%s\n", ts.Description))
+				fmt.Fprintf(&sb, "%s\n", ts.Description)
 			}
 
 			sb.WriteString("\n")
 
 			for _, task := range ts.Tasks {
-				sb.WriteString(fmt.Sprintf("### %s\n\n", task.Title))
-				sb.WriteString(fmt.Sprintf("**Task**: %d\n", task.ID))
-				sb.WriteString(fmt.Sprintf("**Status**: %s\n", task.WorkStatus))
+				fmt.Fprintf(&sb, "### %s\n\n", task.Title)
+				fmt.Fprintf(&sb, "**Task**: %d\n", task.ID)
+				fmt.Fprintf(&sb, "**Status**: %s\n", task.WorkStatus)
 
 				if task.QAEnabled {
 					switch task.QAVerdict {
@@ -721,7 +721,7 @@ func (r *Reporter) GenerateHierarchicalMarkdown(report *ProjectReport) (string, 
 					case global.QAVerdictEscalate:
 						sb.WriteString("**QA**: Escalate\n")
 					default:
-						sb.WriteString(fmt.Sprintf("**QA**: %s\n", task.QAVerdict))
+						fmt.Fprintf(&sb, "**QA**: %s\n", task.QAVerdict)
 					}
 				} else {
 					sb.WriteString("**QA**: None\n")
@@ -753,7 +753,7 @@ func (r *Reporter) GenerateHierarchicalMarkdown(report *ProjectReport) (string, 
 					if len(task.QAIssues) > 0 {
 						sb.WriteString("\n**Issues**:\n\n")
 						for _, issue := range task.QAIssues {
-							sb.WriteString(fmt.Sprintf("- %s\n", issue))
+							fmt.Fprintf(&sb, "- %s\n", issue)
 						}
 					}
 				}

@@ -102,7 +102,7 @@ func (s *Service) withLock(project, path string, fn func() error) error {
 	if err := lock.Lock(); err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 
 	return fn()
 }
@@ -939,9 +939,10 @@ func (s *Service) ResetTaskSet(project, path, mode string, deleteResults bool) (
 
 			// Check if this task should be reset
 			shouldReset := false
-			if mode == "all" {
+			switch mode {
+			case "all":
 				shouldReset = true
-			} else if mode == "failed" {
+			case "failed":
 				// Reset only tasks that are in failed or error status
 				shouldReset = task.Work.Status == global.ExecutionStatusFailed ||
 					task.Work.Status == global.ExecutionStatusError ||

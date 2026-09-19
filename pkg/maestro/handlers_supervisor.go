@@ -41,13 +41,13 @@ func (p *Provider) handleSupervisorUpdate(call *toolspec.ToolCall) (*toolspec.Re
 	// Get task to find the taskset for template validation
 	task, taskPath, err := p.tasks.GetTask(project, uuid)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get task: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to get task: %v", err), IsError: true}, nil
 	}
 
 	// Get taskset for template
 	taskset, err := p.tasks.GetTaskSet(project, taskPath)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get taskset: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to get taskset: %v", err), IsError: true}, nil
 	}
 
 	// Validate response against worker_response_template
@@ -55,24 +55,24 @@ func (p *Provider) handleSupervisorUpdate(call *toolspec.ToolCall) (*toolspec.Re
 		// Load template
 		templateContent, err := p.loadTemplate(project, taskset.WorkerResponseTemplate)
 		if err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to load response template: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to load response template: %v", err), IsError: true}, nil
 		}
 
 		// Parse template as JSON schema
 		var schema map[string]interface{}
 		if err := json.Unmarshal([]byte(templateContent), &schema); err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to parse response template: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to parse response template: %v", err), IsError: true}, nil
 		}
 
 		// Parse response as JSON
 		var responseData map[string]interface{}
 		if err := json.Unmarshal([]byte(response), &responseData); err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("response must be valid JSON matching template. Template:\n%s\n\nYour response is not valid JSON: %v", templateContent, err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("response must be valid JSON matching template. Template:\n%s\n\nYour response is not valid JSON: %v", templateContent, err), IsError: true}, nil
 		}
 
 		// Basic validation: check required fields exist
 		if err := validateResponseAgainstSchema(responseData, schema); err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("response does not match template. Template:\n%s\n\nValidation error: %v", templateContent, err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("response does not match template. Template:\n%s\n\nValidation error: %v", templateContent, err), IsError: true}, nil
 		}
 	}
 
@@ -102,11 +102,11 @@ func (p *Provider) handleSupervisorUpdate(call *toolspec.ToolCall) (*toolspec.Re
 				History: []global.Message{},
 			}
 		} else {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read result file: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to read result file: %v", err), IsError: true}, nil
 		}
 	} else {
 		if err := json.Unmarshal(resultData, &taskResult); err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to parse result file: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to parse result file: %v", err), IsError: true}, nil
 		}
 	}
 
@@ -139,11 +139,11 @@ func (p *Provider) handleSupervisorUpdate(call *toolspec.ToolCall) (*toolspec.Re
 	// Save result file
 	newResultData, err := json.MarshalIndent(taskResult, "", "  ")
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to marshal result: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to marshal result: %v", err), IsError: true}, nil
 	}
 
 	if err := os.WriteFile(resultPath, newResultData, 0644); err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to save result: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to save result: %v", err), IsError: true}, nil
 	}
 
 	// Update task status to done and clear QA verdict
@@ -157,7 +157,7 @@ func (p *Provider) handleSupervisorUpdate(call *toolspec.ToolCall) (*toolspec.Re
 		},
 	}
 	if _, err := p.tasks.UpdateTask(project, uuid, updates); err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to update task status: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to update task status: %v", err), IsError: true}, nil
 	}
 
 	result := map[string]interface{}{
@@ -244,19 +244,19 @@ func (p *Provider) handleReportCreate(call *toolspec.ToolCall) (*toolspec.Result
 	// Get project to retrieve its title for the report session
 	proj, err := p.projects.Get(project)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get project: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to get project: %v", err), IsError: true}, nil
 	}
 
 	// Start a new report session with a fresh prefix
 	_, err = p.projects.StartReport(project, proj.Title, "")
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to start report session: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to start report session: %v", err), IsError: true}, nil
 	}
 
 	// Use runner's GenerateReport function
 	reports, err := p.runner.GenerateReport(project, path)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to generate report: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to generate report: %v", err), IsError: true}, nil
 	}
 
 	result := map[string]interface{}{
