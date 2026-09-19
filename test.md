@@ -4,6 +4,38 @@
 
 The Maestro test suite (`test.sh`) provides comprehensive automated testing for all MCP tools exposed by the server. The test suite ensures that all operations work correctly, data integrity is maintained, and error conditions are handled appropriately.
 
+## Host Mode
+
+`test.sh` can also drive Maestro **embedded in a host** (for example ClawEh)
+instead of the standalone binary. The engine sections run unchanged against the
+host's MCP endpoint; the sections that depend on the standalone LLM
+configuration (fresh start, LLM tools, health fields, LLM history capture) have
+host-mode variants. Nothing under the host's data directory is removed.
+
+```sh
+MODE=host \
+MCP_URL=http://127.0.0.1:8080/mcp \
+MCP_TOKEN=<bearer token for the endpoint> \
+HOST_DATA=/path/to/agent/workspace/maestro \
+./test.sh
+```
+
+Variables:
+
+| Variable | Meaning |
+|----------|---------|
+| `MODE` | `stdio` (default) or `host` |
+| `MCP_URL` | the host's MCP endpoint |
+| `MCP_TOKEN` | bearer token accepted by that endpoint |
+| `HOST_DATA` | Maestro's base directory inside the host, for on-disk checks |
+| `TOOL_PREFIX` | tool name prefix the host applies (default `maestro_`) |
+
+The host must run a deterministic model for the task-execution checks: a
+prompt containing `[[FAIL]]` must make the model call fail, and a prompt
+carrying the `REQUIRED RESPONSE FORMAT` marker must be answered with a JSON
+object. Under a host, an unknown `llm_model_id` fails the task permanently,
+which section 16 asserts in place of the standalone "disabled LLM" check.
+
 ## Test Infrastructure
 
 ### MCPProbe

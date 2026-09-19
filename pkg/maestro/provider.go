@@ -3,6 +3,7 @@ package maestro
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,10 @@ type HostDeps struct {
 	// it into a DispatchResult. With a host Dispatcher present, Maestro does not
 	// choose the model and the LLM-management tools are not exposed.
 	Dispatcher llm.Dispatcher
+	// ImportAllowed, when set, confines file_import to paths the host permits:
+	// it is consulted with the resolved absolute path of every file the import
+	// would read. Unset means imports may come from anywhere (standalone).
+	ImportAllowed func(absPath string) bool
 }
 
 // Provider implements toolspec.ToolProvider for Maestro.
@@ -60,21 +65,23 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 	// Initialize logger and runner from Host if provided
 	var rInst *runner.Runner
 	var hostDispatcher llm.Dispatcher
+	var importAllowed func(string) bool
 	if hd, ok := deps.Host.(HostDeps); ok {
 		if hd.Logger != nil {
 			p.logger = hd.Logger
 		} else {
-			p.logger, _ = logging.New("")
+			p.logger = logging.NewWithWriter(io.Discard)
 		}
 		if hd.Runner != nil {
 			rInst = hd.Runner
 		}
 		hostDispatcher = hd.Dispatcher
+		importAllowed = hd.ImportAllowed
 	} else if l, ok := deps.Host.(*logging.Logger); ok && l != nil {
 		// Fallback for previous implementation
 		p.logger = l
 	} else {
-		p.logger, _ = logging.New("")
+		p.logger = logging.NewWithWriter(io.Discard)
 	}
 
 	// Recreate the initialization from server.go
@@ -93,6 +100,9 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 	)
 	p.playbooks = playbooks.NewService(cfg.PlaybooksDir(), p.logger)
 	p.projects = projects.NewService(cfg, p.logger)
+	if importAllowed != nil {
+		p.projects.SetImportAllowed(importAllowed)
+	}
 	p.tasks = tasks.NewService(cfg, p.projects, p.logger)
 	p.lists = lists.NewService(
 		lists.WithProjectsDir(cfg.ProjectsDir()),
@@ -132,6 +142,29 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 		// a Maestro LLM config entry: say so instead of pointing at llm_list.
 		defs = withParamDescription(defs, "llm_model_id", hostModelHintDescription)
 		defs = withParamDescription(defs, "qa_llm_model_id", hostQAModelHintDescription)
+		if importAllowed != nil {
+			defs = withToolParamDescription(defs, global.ToolFileImport, "source", hostImportSourceDescription)
+		}
+	}
+	return defs
+}
+
+// hostImportSourceDescription replaces file_import's "anywhere on the
+// filesystem" wording when the host confines imports.
+const hostImportSourceDescription = "Source file or directory path (absolute). Only paths this agent may already read — its workspace, its mounts and its allowed read paths — can be imported; anything else is refused."
+
+// withToolParamDescription returns defs with the description of parameter param
+// on the tool named tool replaced by desc.
+func withToolParamDescription(defs []toolspec.ToolDefinition, tool, param, desc string) []toolspec.ToolDefinition {
+	for i := range defs {
+		if defs[i].Name != tool {
+			continue
+		}
+		for j := range defs[i].Parameters {
+			if defs[i].Parameters[j].Name == param {
+				defs[i].Parameters[j].Description = desc
+			}
+		}
 	}
 	return defs
 }

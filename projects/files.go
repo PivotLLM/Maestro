@@ -493,6 +493,7 @@ type ImportResult struct {
 	FilesImported int    `json:"files_imported"`
 	LinksImported int    `json:"links_imported"`
 	LinksRemoved  int    `json:"links_removed,omitempty"` // Symlinks removed for escaping base directory
+	FilesRefused  int    `json:"files_refused,omitempty"` // Entries skipped because the host does not permit reading them
 	ImportedTo    string `json:"imported_to"`
 }
 
@@ -517,6 +518,11 @@ func (s *Service) ImportFiles(project, source string, recursive bool) (*ImportRe
 			return nil, fmt.Errorf("source path not found: %s", source)
 		}
 		return nil, fmt.Errorf("failed to access source: %w", err)
+	}
+
+	// A host may confine imports to what its agent is allowed to read.
+	if !s.importPermitted(source) {
+		return nil, fmt.Errorf("import refused: %s is outside the paths this agent may read", source)
 	}
 
 	// Create base imported directory
@@ -591,6 +597,13 @@ func (s *Service) ImportFiles(project, source string, recursive bool) (*ImportRe
 
 			// Build destination path (inside targetDir which already includes source name)
 			destPath := filepath.Join(targetDir, relPath)
+
+			// Entries the host does not permit reading are skipped, not copied.
+			if !info.IsDir() && !s.importPermitted(path) {
+				s.logger.Warnf("Import skipped %s: outside the paths this agent may read", path)
+				result.FilesRefused++
+				return nil
+			}
 
 			// Check if it's a symlink
 			if info.Mode()&os.ModeSymlink != 0 {
