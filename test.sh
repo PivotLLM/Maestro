@@ -250,9 +250,9 @@ run_test() {
     echo "  ${test_name}"
     result=$(probe_call "$tool" "$params")
 
-    if echo "$result" | grep -q "Tool call succeeded"; then
+    if printf '%s\n' "$result" | grep -q "Tool call succeeded"; then
         if [ -n "$expected" ]; then
-            if echo "$result" | grep -q "$expected"; then
+            if printf '%s\n' "$result" | grep -q "$expected"; then
                 echo "    ${GREEN}PASS${NC}: Found expected: $expected"
                 PASS_COUNT=$((PASS_COUNT + 1))
             else
@@ -281,9 +281,9 @@ run_test_expect_fail() {
     echo "  ${test_name}"
     result=$(probe_call "$tool" "$params")
 
-    if echo "$result" | grep -q "Tool call failed"; then
+    if printf '%s\n' "$result" | grep -q "Tool call failed\|Failed to call tool"; then
         if [ -n "$expected_error" ]; then
-            if echo "$result" | grep -qi "$expected_error"; then
+            if printf '%s\n' "$result" | grep -qi "$expected_error"; then
                 echo "    ${GREEN}PASS${NC}: Got expected error: $expected_error"
                 PASS_COUNT=$((PASS_COUNT + 1))
             else
@@ -311,9 +311,9 @@ run_test_capture() {
     echo "  ${test_name}"
     CAPTURED_RESULT=$(probe_call "$tool" "$params")
 
-    if echo "$CAPTURED_RESULT" | grep -q "Tool call succeeded"; then
+    if printf '%s\n' "$CAPTURED_RESULT" | grep -q "Tool call succeeded"; then
         if [ -n "$expected" ]; then
-            if echo "$CAPTURED_RESULT" | grep -q "$expected"; then
+            if printf '%s\n' "$CAPTURED_RESULT" | grep -q "$expected"; then
                 echo "    ${GREEN}PASS${NC}: Found expected: $expected"
                 PASS_COUNT=$((PASS_COUNT + 1))
             else
@@ -347,8 +347,8 @@ run_test_absent() {
     echo "  ${test_name}"
     result=$(probe_call "$tool" "$params")
 
-    if echo "$result" | grep -q "Tool call succeeded"; then
-        if echo "$result" | grep -q "$unexpected"; then
+    if printf '%s\n' "$result" | grep -q "Tool call succeeded"; then
+        if printf '%s\n' "$result" | grep -q "$unexpected"; then
             echo "    ${RED}FAIL${NC}: Unexpected '$unexpected' found"
             echo "    Output: $result"
             FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -399,7 +399,7 @@ print_subsection "0.2 Verify Directories Created on First Run"
 # Make a simple health check call to trigger directory creation
 echo "  0.2.1 Running health check to trigger directory creation"
 result=$(probe_call "health" '{}')
-if echo "$result" | grep -q "Tool call succeeded"; then
+if printf '%s\n' "$result" | grep -q "Tool call succeeded"; then
     echo "    ${GREEN}PASS${NC}: Health check succeeded"
     PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -1475,8 +1475,8 @@ run_test_expect_fail "6.2.5 Create task in non-existent task set" \
 print_subsection "6.3 List and Get Tasks"
 echo "  6.3.0 Extracting task UUIDs for further tests"
 TASK_LIST_RESULT=$(probe_call "task_list" "{\"project\":\"$TEST_PROJECT\",\"path\":\"analysis\"}")
-TASK_UUID_1=$(echo "$TASK_LIST_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
-TASK_UUID_2=$(echo "$TASK_LIST_RESULT" | grep -o '"uuid":"[^"]*"' | head -2 | tail -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
+TASK_UUID_1=$(printf '%s\n' "$TASK_LIST_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
+TASK_UUID_2=$(printf '%s\n' "$TASK_LIST_RESULT" | grep -o '"uuid":"[^"]*"' | head -2 | tail -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
 
 if [ -n "$TASK_UUID_1" ] && [ -n "$TASK_UUID_2" ]; then
     echo "    ${GREEN}PASS${NC}: Got task UUIDs"
@@ -1819,10 +1819,17 @@ run_test "9.1.5 Health check returns healthy field" \
     '{}' \
     '"healthy"'
 
+if [ "$MODE" = "host" ]; then
+run_test_absent "9.1.6 Health check omits first_run under a host (no config file)" \
+    "health" \
+    '{}' \
+    '"first_run"'
+else
 run_test "9.1.6 Health check returns first_run" \
     "health" \
     '{}' \
     '"first_run"'
+fi
 
 print_subsection "9.2 Cross-Domain File Operations"
 # Setup: Ensure playbook exists for cross-domain copy tests
@@ -2570,8 +2577,8 @@ print_subsection "13.5 task_create"
 
 echo "  13.5.0 Creating task to capture UUID"
 TASK_CAPTURE_RESULT=$(probe_call "task_create" "{\"project\":\"$TEST_PROJECT\",\"path\":\"$TEST_TASKSET_PATH\",\"title\":\"Dispatch Test Task\",\"type\":\"test\",\"prompt\":\"Test dispatch prompt\"}")
-if echo "$TASK_CAPTURE_RESULT" | grep -q "Tool call succeeded"; then
-    TEST_TASK_UUID=$(echo "$TASK_CAPTURE_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
+if printf '%s\n' "$TASK_CAPTURE_RESULT" | grep -q "Tool call succeeded"; then
+    TEST_TASK_UUID=$(printf '%s\n' "$TASK_CAPTURE_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
     if [ -n "$TEST_TASK_UUID" ]; then
         echo "    ${GREEN}PASS${NC}: Task created, UUID=$TEST_TASK_UUID"
         PASS_COUNT=$((PASS_COUNT + 1))
@@ -2718,7 +2725,7 @@ echo "  13.11.4 Cleanup auto-generated dispatch tasksets"
 for f in "$TEST_DATA/projects/$TEST_PROJECT/tasks/dispatch"__*.json; do
     [ -f "$f" ] || continue
     fname=$(basename "$f" .json)
-    tpath=$(echo "$fname" | sed 's/__/\//g')
+    tpath=$(printf '%s\n' "$fname" | sed 's/__/\//g')
     cleanup_silent "taskset_delete" "{\"project\":\"$TEST_PROJECT\",\"path\":\"$tpath\"}"
 done
 echo "    ${GREEN}PASS${NC}: Auto-generated dispatch tasksets cleaned up"
@@ -2763,8 +2770,8 @@ print_subsection "13.2 Run Success Task and Verify History"
 
 RUN_RESULT=$(call_tool "task_run" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"success-test\"}")
 echo "  13.2.1 Run success task"
-TASKS_FOUND_VAL=$(echo "$RUN_RESULT" | jq -r '.tasks_found // 0' 2>/dev/null)
-if echo "$RUN_RESULT" | grep -q '"tasks_found"' && [ "${TASKS_FOUND_VAL:-0}" -gt 0 ] 2>/dev/null; then
+TASKS_FOUND_VAL=$(printf '%s\n' "$RUN_RESULT" | jq -r '.tasks_found // 0' 2>/dev/null)
+if printf '%s\n' "$RUN_RESULT" | grep -q '"tasks_found"' && [ "${TASKS_FOUND_VAL:-0}" -gt 0 ] 2>/dev/null; then
     echo "    ${GREEN}PASS${NC}: tasks_found=$TASKS_FOUND_VAL"
     PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -2818,8 +2825,8 @@ fi
 
 STDERR_RUN_RESULT=$(call_tool "task_run" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\"}")
 echo "  13.3.3 Run stderr task"
-STDERR_TASKS_FOUND=$(echo "$STDERR_RUN_RESULT" | jq -r '.tasks_found // 0' 2>/dev/null)
-if echo "$STDERR_RUN_RESULT" | grep -q '"tasks_found"' && [ "${STDERR_TASKS_FOUND:-0}" -gt 0 ] 2>/dev/null; then
+STDERR_TASKS_FOUND=$(printf '%s\n' "$STDERR_RUN_RESULT" | jq -r '.tasks_found // 0' 2>/dev/null)
+if printf '%s\n' "$STDERR_RUN_RESULT" | grep -q '"tasks_found"' && [ "${STDERR_TASKS_FOUND:-0}" -gt 0 ] 2>/dev/null; then
     echo "    ${GREEN}PASS${NC}: tasks_found=$STDERR_TASKS_FOUND"
     PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -2834,8 +2841,8 @@ STDERR_STATUS=""
 STDERR_ERROR=""
 for i in $(seq 1 90); do
     STDERR_TASK_RESULT=$(call_tool "task_list" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"stderr-test\"}")
-    STDERR_STATUS=$(echo "$STDERR_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
-    STDERR_ERROR=$(echo "$STDERR_TASK_RESULT" | jq -r '.tasks[0].work.error // empty')
+    STDERR_STATUS=$(printf '%s\n' "$STDERR_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
+    STDERR_ERROR=$(printf '%s\n' "$STDERR_TASK_RESULT" | jq -r '.tasks[0].work.error // empty')
     [ "$STDERR_STATUS" = "failed" ] || [ "$STDERR_STATUS" = "done" ] && break
     sleep 1
 done
@@ -2848,7 +2855,7 @@ if [ "$MODE" = "host" ]; then
         echo "    ${RED}FAIL${NC}: Expected status=failed with a recorded error, got status=$STDERR_STATUS, error='$STDERR_ERROR'"
         FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
-elif [ "$STDERR_STATUS" = "failed" ] && echo "$STDERR_ERROR" | grep -q "stderr error message"; then
+elif [ "$STDERR_STATUS" = "failed" ] && printf '%s\n' "$STDERR_ERROR" | grep -q "stderr error message"; then
     echo "    ${GREEN}PASS${NC}: Task failed with stderr captured: '$STDERR_ERROR'"
     PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -2880,12 +2887,12 @@ DISABLED_TASK_STATUS=""
 DISABLED_TASK_ERROR=""
 for i in $(seq 1 90); do
     DISABLED_TASK_RESULT=$(call_tool "task_list" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"disabled-llm-test\"}")
-    DISABLED_TASK_STATUS=$(echo "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
-    DISABLED_TASK_ERROR=$(echo "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.error // empty')
+    DISABLED_TASK_STATUS=$(printf '%s\n' "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
+    DISABLED_TASK_ERROR=$(printf '%s\n' "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.error // empty')
     [ "$DISABLED_TASK_STATUS" = "failed" ] || [ "$DISABLED_TASK_STATUS" = "done" ] && break
     sleep 1
 done
-if [ "$DISABLED_TASK_STATUS" = "failed" ] && echo "$DISABLED_TASK_ERROR" | grep -q "permanent"; then
+if [ "$DISABLED_TASK_STATUS" = "failed" ] && printf '%s\n' "$DISABLED_TASK_ERROR" | grep -q "permanent"; then
     echo "    ${GREEN}PASS${NC}: Task failed permanently: '$DISABLED_TASK_ERROR'"
     PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -2894,7 +2901,7 @@ else
 fi
 
 echo "  13.4.4 Verify the unknown-alias task was not retried"
-DISABLED_INVOCATIONS=$(echo "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.invocations // 0')
+DISABLED_INVOCATIONS=$(printf '%s\n' "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.invocations // 0')
 if [ "$DISABLED_INVOCATIONS" = "1" ]; then
     echo "    ${GREEN}PASS${NC}: invocations=1"
     PASS_COUNT=$((PASS_COUNT + 1))
@@ -2910,7 +2917,7 @@ run_test "13.4.2 Create task with disabled LLM" \
 
 # Run task - pre-flight check should fail for disabled LLM, no tasks executed
 DISABLED_RUN_RESULT=$(call_tool "task_run" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"disabled-llm-test\",\"wait\":true}")
-DISABLED_TASKS_EXECUTED=$(echo "$DISABLED_RUN_RESULT" | jq -r '.tasks_executed // 0')
+DISABLED_TASKS_EXECUTED=$(printf '%s\n' "$DISABLED_RUN_RESULT" | jq -r '.tasks_executed // 0')
 
 echo "  13.4.3 Verify disabled LLM task was not executed"
 if [ "$DISABLED_TASKS_EXECUTED" = "0" ]; then
@@ -2923,7 +2930,7 @@ fi
 
 # Verify task is still in waiting status
 DISABLED_TASK_RESULT=$(call_tool "task_list" "{\"project\":\"$LLM_TEST_PROJECT\",\"path\":\"disabled-llm-test\"}")
-DISABLED_TASK_STATUS=$(echo "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
+DISABLED_TASK_STATUS=$(printf '%s\n' "$DISABLED_TASK_RESULT" | jq -r '.tasks[0].work.status // empty')
 
 echo "  13.4.4 Verify task with disabled LLM is still waiting"
 if [ "$DISABLED_TASK_STATUS" = "waiting" ]; then
@@ -2958,10 +2965,14 @@ run_test "14.1.1 Start report session" \
     "{\"action\":\"start\",\"project\":\"$TEST_PROJECT\",\"title\":\"Test Report\",\"intro\":\"This is a test report.\"}" \
     '"main_report"'
 
-run_test "14.1.2 Verify main_report filename returned" \
+run_test_capture "14.1.2 Verify main_report filename returned" \
     "report_write" \
     "{\"action\":\"start\",\"project\":\"$TEST_PROJECT\",\"title\":\"Second Report\",\"intro\":\"\"}" \
     'Report.md'
+# The active session's main report is where 14.2 appends go; remember its name
+# so 14.4 reads that file rather than whichever report the listing shows first
+# (a task_report from section 7 can share the timestamp prefix).
+MAIN_REPORT=$(printf '%s\n' "$CAPTURED_RESULT" | grep -o '"main_report":"[^"]*"' | head -1 | sed 's/"main_report":"//;s/"//')
 
 print_subsection "14.2 Report Append"
 
@@ -3001,7 +3012,10 @@ run_test_capture "14.4.1 Get report list for reading" \
     "reports"
 
 # Extract a report name from the captured output
-REPORT_NAME=$(echo "$CAPTURED_RESULT" | grep -o '"name":"[^"]*Report\.md"' | head -1 | sed 's/"name":"//;s/"//')
+REPORT_NAME="$MAIN_REPORT"
+if [ -z "$REPORT_NAME" ]; then
+    REPORT_NAME=$(printf '%s\n' "$CAPTURED_RESULT" | grep -o '"name":"[^"]*Report\.md"' | head -1 | sed 's/"name":"//;s/"//')
+fi
 if [ -n "$REPORT_NAME" ]; then
     run_test "14.4.2 Read specific report by name" \
         "report_get" \
@@ -3134,7 +3148,7 @@ run_test "14.8.2 Create task for supervisor test" \
 
 # Get the task UUID for supervisor_update
 SUPERVISOR_TASK_RESULT=$(probe_call "task_list" "{\"project\":\"$TEST_PROJECT\",\"path\":\"supervisor-test\"}")
-SUPERVISOR_TASK_UUID=$(echo "$SUPERVISOR_TASK_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
+SUPERVISOR_TASK_UUID=$(printf '%s\n' "$SUPERVISOR_TASK_RESULT" | grep -o '"uuid":"[^"]*"' | head -1 | sed 's/"uuid":"\([^"]*\)"/\1/')
 
 if [ -n "$SUPERVISOR_TASK_UUID" ]; then
     run_test "14.8.3 Apply supervisor update" \
