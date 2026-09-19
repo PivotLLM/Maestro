@@ -35,7 +35,7 @@ func newProgrammaticRunner(t *testing.T, d *recordingDispatcher, opts ...config.
 	if err != nil {
 		t.Fatalf("logger: %v", err)
 	}
-	t.Cleanup(func() { lg.Close() })
+	t.Cleanup(func() { _ = lg.Close() })
 
 	ref := reference.NewService(reference.WithEmbeddedFS(cfg.EmbeddedFS()), reference.WithLogger(lg))
 	pb := playbooks.NewService(cfg.PlaybooksDir(), lg)
@@ -80,7 +80,7 @@ func TestRun_AllowParallelFalse_RunsSequentially(t *testing.T) {
 	if _, err := tr.Run(context.Background(), &global.RunRequest{Project: project}, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	tr.Runner.Wait()
+	tr.Wait()
 
 	if calls, _, _ := d.snapshot(); calls != 2 {
 		t.Errorf("dispatch calls = %d, want 2 (tasks still run)", calls)
@@ -99,7 +99,7 @@ func TestRun_AllowParallelDefault_Honoured(t *testing.T) {
 	if _, err := tr.Run(context.Background(), &global.RunRequest{Project: project}, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	tr.Runner.Wait()
+	tr.Wait()
 
 	if calls, _, _ := d.snapshot(); calls != 2 {
 		t.Errorf("dispatch calls = %d, want 2", calls)

@@ -140,7 +140,7 @@ func TestHandleStartHere_HostDispatched(t *testing.T) {
 	if err != nil {
 		t.Fatalf("logger: %v", err)
 	}
-	defer lg.Close()
+	defer func() { _ = lg.Close() }()
 	ref := reference.NewService(reference.WithEmbeddedFS(EmbeddedReference), reference.WithLogger(lg))
 
 	content := func(hostDispatched bool) string {
