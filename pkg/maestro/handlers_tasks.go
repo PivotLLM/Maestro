@@ -46,7 +46,7 @@ func (p *Provider) handleTaskRun(call *toolspec.ToolCall) (*toolspec.Result, err
 
 	result, err := p.runner.Run(call.Ctx, runReq, completionSink(call))
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to run tasks: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to run tasks: %v", err), IsError: true}, nil
 	}
 
 	return createJSONResult(result)
@@ -66,7 +66,7 @@ func (p *Provider) handleTaskStatus(call *toolspec.ToolCall) (*toolspec.Result, 
 
 	result, err := p.runner.GetTaskStatus(project, path, taskType)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get task status: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to get task status: %v", err), IsError: true}, nil
 	}
 
 	return createJSONResult(result)
@@ -108,7 +108,7 @@ func (p *Provider) handleTaskResults(call *toolspec.ToolCall) (*toolspec.Result,
 
 	result, err := p.runner.GetResults(resultsReq)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get results: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to get results: %v", err), IsError: true}, nil
 	}
 
 	return createJSONResult(result)
@@ -132,13 +132,13 @@ func (p *Provider) handleTaskResultGet(call *toolspec.ToolCall) (*toolspec.Resul
 	// Get task to find the taskset path and template
 	task, taskPath, err := p.tasks.GetTask(project, uuid)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get task: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to get task: %v", err), IsError: true}, nil
 	}
 
 	// Get taskset to retrieve template info
 	taskset, err := p.tasks.GetTaskSet(project, taskPath)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to get taskset: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to get taskset: %v", err), IsError: true}, nil
 	}
 
 	// Load the actual schema content if template is specified
@@ -173,12 +173,12 @@ func (p *Provider) handleTaskResultGet(call *toolspec.ToolCall) (*toolspec.Resul
 			}
 			return createJSONResult(response)
 		}
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read result file: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to read result file: %v", err), IsError: true}, nil
 	}
 
 	var taskResult global.TaskResult
 	if err := json.Unmarshal(data, &taskResult); err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to parse result file: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to parse result file: %v", err), IsError: true}, nil
 	}
 
 	// Build condensed response
@@ -244,7 +244,7 @@ func (p *Provider) handleTaskReport(call *toolspec.ToolCall) (*toolspec.Result, 
 	// List all task sets for the project
 	taskSetList, err := p.tasks.ListTaskSets(project, path)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to list task sets: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to list task sets: %v", err), IsError: true}, nil
 	}
 
 	// Create content loaders for template loading
@@ -299,13 +299,13 @@ func (p *Provider) handleTaskReport(call *toolspec.ToolCall) (*toolspec.Result, 
 	}
 
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to generate report: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to generate report: %v", err), IsError: true}, nil
 	}
 
 	// Optionally save to file in project files directory
 	if outputPath != "" {
 		if _, err := p.projects.PutFile(project, outputPath, content, "Generated report"); err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to save report: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to save report: %v", err), IsError: true}, nil
 		}
 	}
 

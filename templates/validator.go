@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/PivotLLM/Maestro/global"
 	"os"
 	"strings"
 	"text/template"
@@ -288,7 +289,7 @@ func templateFuncs() template.FuncMap {
 		},
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
-		"title": strings.Title,
+		"title": global.Title,
 		"join":  strings.Join,
 		"default": func(def, value interface{}) interface{} {
 			if value == nil {

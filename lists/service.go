@@ -1066,17 +1066,17 @@ func (s *Service) CreateTasks(
 		// Build item context to append to prompt
 		var itemContext strings.Builder
 		itemContext.WriteString("\n=== LIST ITEM ===\n")
-		itemContext.WriteString(fmt.Sprintf("ID: %s\n", item.ID))
-		itemContext.WriteString(fmt.Sprintf("Title: %s\n", item.Title))
-		itemContext.WriteString(fmt.Sprintf("Content: %s\n", item.Content))
+		fmt.Fprintf(&itemContext, "ID: %s\n", item.ID)
+		fmt.Fprintf(&itemContext, "Title: %s\n", item.Title)
+		fmt.Fprintf(&itemContext, "Content: %s\n", item.Content)
 		if item.SourceDoc != "" {
-			itemContext.WriteString(fmt.Sprintf("Source: %s\n", item.SourceDoc))
+			fmt.Fprintf(&itemContext, "Source: %s\n", item.SourceDoc)
 		}
 		if item.Section != "" {
-			itemContext.WriteString(fmt.Sprintf("Section: %s\n", item.Section))
+			fmt.Fprintf(&itemContext, "Section: %s\n", item.Section)
 		}
 		if len(item.Tags) > 0 {
-			itemContext.WriteString(fmt.Sprintf("Tags: %s\n", strings.Join(item.Tags, ", ")))
+			fmt.Fprintf(&itemContext, "Tags: %s\n", strings.Join(item.Tags, ", "))
 		}
 
 		// Combine base prompt with item context

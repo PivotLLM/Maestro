@@ -30,18 +30,18 @@ func setupTestService(t *testing.T) (*Service, string) {
 	playbooksDir := filepath.Join(tempDir, "playbooks")
 
 	if err := os.MkdirAll(projectsDir, 0755); err != nil {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 		t.Fatalf("Failed to create projects dir: %v", err)
 	}
 	if err := os.MkdirAll(playbooksDir, 0755); err != nil {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 		t.Fatalf("Failed to create playbooks dir: %v", err)
 	}
 
 	logFile := filepath.Join(tempDir, "test.log")
 	logger, err := logging.New(logFile)
 	if err != nil {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 	service := NewService(
@@ -72,7 +72,7 @@ func createTestPlaybook(t *testing.T, tempDir, playbookName string) {
 
 func TestListCreate(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -101,7 +101,7 @@ func TestListCreate(t *testing.T) {
 
 func TestListCreateDuplicate(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -120,7 +120,7 @@ func TestListCreateDuplicate(t *testing.T) {
 
 func TestListCreateWithItems(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -146,7 +146,7 @@ func TestListCreateWithItems(t *testing.T) {
 
 func TestListCreateWithDuplicateItemIDs(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -163,7 +163,7 @@ func TestListCreateWithDuplicateItemIDs(t *testing.T) {
 
 func TestListCreateInReference(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	err := service.Create(SourceReference, "", "", "items.json", "Test List", "", nil)
 	if err == nil {
@@ -173,7 +173,7 @@ func TestListCreateInReference(t *testing.T) {
 
 func TestListDelete(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -198,7 +198,7 @@ func TestListDelete(t *testing.T) {
 
 func TestListRename(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -232,7 +232,7 @@ func TestListRename(t *testing.T) {
 
 func TestItemAdd(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -280,7 +280,7 @@ func TestItemAdd(t *testing.T) {
 
 func TestItemAddAutoIncrementID(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -323,7 +323,7 @@ func TestItemAddAutoIncrementID(t *testing.T) {
 
 func TestItemAddIgnoresProvidedID(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -367,7 +367,7 @@ func TestItemAddIgnoresProvidedID(t *testing.T) {
 
 func TestItemUpdate(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -398,7 +398,7 @@ func TestItemUpdate(t *testing.T) {
 
 func TestItemRemove(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -434,7 +434,7 @@ func TestItemRemove(t *testing.T) {
 
 func TestItemRename(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -468,7 +468,7 @@ func TestItemRename(t *testing.T) {
 
 func TestItemSearch(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -522,7 +522,7 @@ func TestItemSearch(t *testing.T) {
 
 func TestListInPlaybook(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestPlaybook(t, tempDir, "test-playbook")
 
@@ -545,7 +545,7 @@ func TestListInPlaybook(t *testing.T) {
 
 func TestListList(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -572,7 +572,7 @@ func TestListList(t *testing.T) {
 
 func TestGetSummary(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 
@@ -604,7 +604,7 @@ func TestGetSummary(t *testing.T) {
 
 func TestListNameValidation(t *testing.T) {
 	service, tempDir := setupTestService(t)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	createTestProject(t, tempDir, "test-project")
 

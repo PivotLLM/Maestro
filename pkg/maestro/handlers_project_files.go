@@ -38,7 +38,7 @@ func (p *Provider) handleFileConvert(call *toolspec.ToolCall) (*toolspec.Result,
 	// Get project files directory
 	filesDir := p.projects.GetFilesDir(project)
 	if filesDir == "" {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("project not found: %s", project)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("project not found: %s", project), IsError: true}, nil
 	}
 
 	// Build full path within project files directory
@@ -47,11 +47,11 @@ func (p *Provider) handleFileConvert(call *toolspec.ToolCall) (*toolspec.Result,
 	// Ensure path is within project files directory (prevent path traversal)
 	absFilesDir, err := filepath.Abs(filesDir)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to resolve files directory: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to resolve files directory: %v", err), IsError: true}, nil
 	}
 	absPath, err := filepath.Abs(fullPath)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to resolve path: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to resolve path: %v", err), IsError: true}, nil
 	}
 	if len(absPath) < len(absFilesDir) || absPath[:len(absFilesDir)] != absFilesDir {
 		return nil, fmt.Errorf("%s", "path must be within project files directory")
@@ -60,10 +60,10 @@ func (p *Provider) handleFileConvert(call *toolspec.ToolCall) (*toolspec.Result,
 	// Check if path exists and validate type
 	info, err := os.Stat(fullPath)
 	if os.IsNotExist(err) {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("path not found: %s", path)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("path not found: %s", path), IsError: true}, nil
 	}
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to access path: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to access path: %v", err), IsError: true}, nil
 	}
 
 	// Validate path type matches recursive flag
@@ -86,7 +86,7 @@ func (p *Provider) handleFileConvert(call *toolspec.ToolCall) (*toolspec.Result,
 	// Run conversion
 	result, err := converter.Convert(fullPath)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("conversion failed: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("conversion failed: %v", err), IsError: true}, nil
 	}
 
 	// Build response
@@ -139,7 +139,7 @@ func (p *Provider) handleFileExtract(call *toolspec.ToolCall) (*toolspec.Result,
 	// Get project files directory
 	filesDir := p.projects.GetFilesDir(project)
 	if filesDir == "" {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("project not found: %s", project)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("project not found: %s", project), IsError: true}, nil
 	}
 
 	// Build full path to zip file
@@ -148,11 +148,11 @@ func (p *Provider) handleFileExtract(call *toolspec.ToolCall) (*toolspec.Result,
 	// Ensure path is within project files directory (prevent path traversal)
 	absFilesDir, err := filepath.Abs(filesDir)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to resolve files directory: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to resolve files directory: %v", err), IsError: true}, nil
 	}
 	absZipPath, err := filepath.Abs(zipPath)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to resolve path: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to resolve path: %v", err), IsError: true}, nil
 	}
 	if !strings.HasPrefix(absZipPath, absFilesDir+string(filepath.Separator)) {
 		return nil, fmt.Errorf("%s", "path must be within project files directory")
@@ -160,7 +160,7 @@ func (p *Provider) handleFileExtract(call *toolspec.ToolCall) (*toolspec.Result,
 
 	// Check zip file exists
 	if _, err := os.Stat(zipPath); os.IsNotExist(err) {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("zip file not found: %s", path)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("zip file not found: %s", path), IsError: true}, nil
 	}
 
 	// Determine extraction directory (same name as zip without extension)
@@ -171,7 +171,7 @@ func (p *Provider) handleFileExtract(call *toolspec.ToolCall) (*toolspec.Result,
 	// Extract the zip
 	extracted, skipped, err := extractZipFile(zipPath, extractDir, overwrite, p.logger)
 	if err != nil {
-		return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("extraction failed: %v", err)), IsError: true}, nil
+		return &toolspec.Result{ForLLM: fmt.Sprintf("extraction failed: %v", err), IsError: true}, nil
 	}
 
 	// Sanitize symlinks in extracted directory
@@ -215,7 +215,7 @@ func extractZipFile(zipPath, destDir string, overwrite bool, logger interface{ W
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to open zip file: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	extracted := 0
 	skipped := 0
@@ -289,13 +289,13 @@ func extractZipEntry(f *zip.File, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	_, err = io.Copy(outFile, rc)
 	return err

@@ -65,9 +65,9 @@ func (d *recordingDispatcher) snapshot() (int, any, error) {
 func newHostDispatchedRunner(t *testing.T, d *recordingDispatcher) (*testRunner, string, string) {
 	t.Helper()
 	tr, tmpDir := setupTestRunner(t)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-	tr.Runner.llm = d
-	tr.Runner.SetHostDispatched(true)
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
+	tr.llm = d
+	tr.SetHostDispatched(true)
 
 	project := "host-project"
 	if _, err := tr.projects.Create(project, "Host Project", "host dispatch tests", "", "", "none"); err != nil {
@@ -96,7 +96,7 @@ func TestRun_HostDispatch_KeepsCallerContextValues(t *testing.T) {
 	}
 	// The tool call returns before the run finishes; its context ends here.
 	cancel()
-	tr.Runner.Wait()
+	tr.Wait()
 
 	calls, got, ctxErr := d.snapshot()
 	if calls != 1 {
@@ -122,7 +122,7 @@ func TestRunDispatch_HostDispatch_KeepsCallerContextValues(t *testing.T) {
 		t.Fatalf("RunDispatch: %v", err)
 	}
 	cancel()
-	tr.Runner.Wait()
+	tr.Wait()
 
 	calls, got, ctxErr := d.snapshot()
 	if calls != 1 {
@@ -153,7 +153,7 @@ func TestRunDispatch_NilContext(t *testing.T) {
 	if _, err := tr.RunDispatch(nil, &DispatchRequest{Project: project, Prompt: "do it"}, nil); err != nil {
 		t.Fatalf("RunDispatch: %v", err)
 	}
-	tr.Runner.Wait()
+	tr.Wait()
 	if calls, _, _ := d.snapshot(); calls != 1 {
 		t.Errorf("dispatch calls = %d, want 1", calls)
 	}
@@ -169,7 +169,7 @@ func TestExecuteTask_PermanentError_NoRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunDispatch: %v", err)
 	}
-	tr.Runner.Wait()
+	tr.Wait()
 
 	if calls, _, _ := d.snapshot(); calls != 1 {
 		t.Errorf("dispatch calls = %d, want exactly 1 (permanent errors must not be retried)", calls)
@@ -212,7 +212,7 @@ func TestExecuteTask_TransientError_StillRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunDispatch: %v", err)
 	}
-	tr.Runner.Wait()
+	tr.Wait()
 
 	task, _, err := tr.tasks.GetTask(project, res.UUID)
 	if err != nil {

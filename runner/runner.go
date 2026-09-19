@@ -88,14 +88,6 @@ func (rs *recoveryState) enterRecovery(llmID string, llmConfig *config.LLM) {
 	rs.llmConfig = llmConfig
 }
 
-// resetWaitTimer resets the wait timer when another failure arrives during recovery
-func (rs *recoveryState) resetWaitTimer() {
-	rs.mu.Lock()
-	defer rs.mu.Unlock()
-	// Reset enteredAt to extend the current wait period
-	rs.enteredAt = time.Now()
-}
-
 // exitRecovery exits recovery mode
 func (rs *recoveryState) exitRecovery() {
 	rs.mu.Lock()
@@ -405,9 +397,10 @@ func (r *Runner) logTaskFinished(project string, task *global.Task) {
 		return
 	}
 
-	if task.Work.Status == global.ExecutionStatusFailed {
+	switch task.Work.Status {
+	case global.ExecutionStatusFailed:
 		finalStatus = "failed"
-	} else if task.Work.Status == global.ExecutionStatusDone {
+	case global.ExecutionStatusDone:
 		// Check QA verdict if QA was enabled
 		if task.QA.Enabled {
 			switch task.QA.Verdict {
@@ -424,31 +417,13 @@ func (r *Runner) logTaskFinished(project string, task *global.Task) {
 		} else {
 			finalStatus = "done"
 		}
-	} else {
+	default:
 		// Unknown or processing state - don't log finished
 		return
 	}
 
 	r.logger.Infof("Task %d: Finished with status %s", task.ID, finalStatus)
 	r.logToProject(project, fmt.Sprintf("Task %d: Finished with status %s", task.ID, finalStatus))
-}
-
-// recordHistoryPrompt records a prompt message to task history
-func (r *Runner) recordHistoryPrompt(taskUUID, role, prompt, llmID string, invocation int) {
-	msg := global.Message{
-		Timestamp:  time.Now(),
-		Role:       role,
-		Invocation: invocation,
-		LLMModelID: llmID,
-		Prompt:     prompt,
-		Type:       "prompt", // Legacy field for compatibility
-		Content:    prompt,   // Legacy field for compatibility
-	}
-
-	existing, _ := r.taskHistory.LoadOrStore(taskUUID, []global.Message{})
-	history := existing.([]global.Message)
-	history = append(history, msg)
-	r.taskHistory.Store(taskUUID, history)
 }
 
 // recordHistoryResponse records a response message to task history.
@@ -659,11 +634,6 @@ func (r *Runner) getTaskHistory(taskUUID string) []global.Message {
 		return existing.([]global.Message)
 	}
 	return nil
-}
-
-// clearTaskHistory removes accumulated history for a task (called after saving to result file)
-func (r *Runner) clearTaskHistory(taskUUID string) {
-	r.taskHistory.Delete(taskUUID)
 }
 
 // TaskStatusResult represents the status of tasks in a project
@@ -1886,7 +1856,7 @@ func (r *Runner) buildPrompt(project, path string, task *global.Task) (string, e
 
 	// 0. Always inject project name (mandatory for cross-project isolation)
 	sb.WriteString("=== PROJECT CONTEXT ===\n\n")
-	sb.WriteString(fmt.Sprintf("Project: %s\n", project))
+	fmt.Fprintf(&sb, "Project: %s\n", project)
 	sb.WriteString("IMPORTANT: Use this project name (with source=project) for ALL file operations (file_list, file_get, file_search).\n\n")
 
 	// Append optional user-defined context if available
@@ -2870,7 +2840,7 @@ func (r *Runner) buildQAPrompt(project, path string, task *global.Task) (string,
 
 	// 0. Always inject project name (mandatory for cross-project isolation)
 	sb.WriteString("=== PROJECT CONTEXT ===\n\n")
-	sb.WriteString(fmt.Sprintf("Project: %s\n", project))
+	fmt.Fprintf(&sb, "Project: %s\n", project)
 	sb.WriteString("IMPORTANT: Use this project name (with source=project) for ALL file operations (file_list, file_get, file_search).\n\n")
 
 	// Append optional user-defined context if available
@@ -2979,7 +2949,7 @@ func (r *Runner) reviseWork(ctx context.Context, project, path string, task *glo
 
 	// 0. Always inject project name (mandatory for cross-project isolation)
 	sb.WriteString("=== PROJECT CONTEXT ===\n\n")
-	sb.WriteString(fmt.Sprintf("Project: %s\n", project))
+	fmt.Fprintf(&sb, "Project: %s\n", project)
 	sb.WriteString("IMPORTANT: Use this project name (with source=project) for ALL file operations (file_list, file_get, file_search).\n\n")
 
 	// Append optional user-defined context if available
@@ -3027,7 +2997,7 @@ func (r *Runner) reviseWork(ctx context.Context, project, path string, task *glo
 	// 5. Append QA feedback
 	// Include the full QA result so the worker can see all feedback details
 	sb.WriteString("=== QA FEEDBACK ===\n\n")
-	sb.WriteString(fmt.Sprintf("The previous attempt was reviewed by QA and received verdict: %s\n\n", task.QA.Verdict))
+	fmt.Fprintf(&sb, "The previous attempt was reviewed by QA and received verdict: %s\n\n", task.QA.Verdict)
 	sb.WriteString("Full QA response:\n")
 
 	// Load QA result from results file
@@ -3279,7 +3249,7 @@ func (r *Runner) generateAndSaveReport(project, pathFilter string) ([]string, er
 			}
 
 			// Write task set header (## level since main report has # header)
-			content.WriteString(fmt.Sprintf("## %s\n\n", ts.Title))
+			fmt.Fprintf(&content, "## %s\n\n", ts.Title)
 
 			// Write each task - template handles the full output including header
 			for _, task := range ts.Tasks {
@@ -3294,8 +3264,8 @@ func (r *Runner) generateAndSaveReport(project, pathFilter string) ([]string, er
 					}
 				} else {
 					// No result yet - just show basic task info
-					content.WriteString(fmt.Sprintf("### %s\n\n", task.Title))
-					content.WriteString(fmt.Sprintf("**Task**: %d (%s)\n\n---\n\n", task.ID, task.WorkStatus))
+					fmt.Fprintf(&content, "### %s\n\n", task.Title)
+					fmt.Fprintf(&content, "**Task**: %d (%s)\n\n---\n\n", task.ID, task.WorkStatus)
 				}
 			}
 		}

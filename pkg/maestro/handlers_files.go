@@ -52,7 +52,7 @@ func (p *Provider) handleFileCopy(call *toolspec.ToolCall) (*toolspec.Result, er
 
 	// Validate destination (reference is read-only)
 	if toSource != "playbook" && toSource != "project" {
-		return &toolspec.Result{ForLLM: fmt.Sprint("to_source must be 'playbook' or 'project' (reference is read-only)"), IsError: true}, nil
+		return &toolspec.Result{ForLLM: "to_source must be 'playbook' or 'project' (reference is read-only)", IsError: true}, nil
 	}
 
 	// Read source file (entire file, no byte range)
@@ -63,7 +63,7 @@ func (p *Provider) handleFileCopy(call *toolspec.ToolCall) (*toolspec.Result, er
 	case "reference":
 		item, err := p.reference.Get(fromPath, 0, 0)
 		if err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read source file: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to read source file: %v", err), IsError: true}, nil
 		}
 		content = item.Content
 
@@ -73,7 +73,7 @@ func (p *Provider) handleFileCopy(call *toolspec.ToolCall) (*toolspec.Result, er
 		}
 		item, err := p.playbooks.GetFile(fromPlaybook, fromPath, 0, 0)
 		if err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read source file: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to read source file: %v", err), IsError: true}, nil
 		}
 		content = item.Content
 
@@ -83,7 +83,7 @@ func (p *Provider) handleFileCopy(call *toolspec.ToolCall) (*toolspec.Result, er
 		}
 		item, err := p.projects.GetFile(fromProject, fromPath, 0, 0)
 		if err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to read source file: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to read source file: %v", err), IsError: true}, nil
 		}
 		content = item.Content
 	}
@@ -98,7 +98,7 @@ func (p *Provider) handleFileCopy(call *toolspec.ToolCall) (*toolspec.Result, er
 		}
 		created, err = p.playbooks.PutFile(toPlaybook, toPath, content, summary)
 		if err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to write destination file: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to write destination file: %v", err), IsError: true}, nil
 		}
 
 	case "project":
@@ -107,7 +107,7 @@ func (p *Provider) handleFileCopy(call *toolspec.ToolCall) (*toolspec.Result, er
 		}
 		created, err = p.projects.PutFile(toProject, toPath, content, summary)
 		if err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("failed to write destination file: %v", err)), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("failed to write destination file: %v", err), IsError: true}, nil
 		}
 	}
 
@@ -482,7 +482,7 @@ func (p *Provider) handleFileDelete(call *toolspec.ToolCall) (*toolspec.Result, 
 		}
 		result["playbook"] = playbook
 	default:
-		return &toolspec.Result{ForLLM: fmt.Sprint("source must be 'project' or 'playbook' (reference is read-only)"), IsError: true}, nil
+		return &toolspec.Result{ForLLM: "source must be 'project' or 'playbook' (reference is read-only)", IsError: true}, nil
 	}
 
 	return createJSONResult(result)

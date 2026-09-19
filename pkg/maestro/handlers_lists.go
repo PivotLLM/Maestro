@@ -552,7 +552,7 @@ func (p *Provider) handleListCreateTasks(call *toolspec.ToolCall) (*toolspec.Res
 	}
 	if qaEnabled && qaInstructionsFile != "" {
 		if err := p.validateInstructionsFile(targetProject, qaInstructionsFile, qaInstructionsFileSource); err != nil {
-			return &toolspec.Result{ForLLM: fmt.Sprint(fmt.Sprintf("QA %s", err.Error())), IsError: true}, nil
+			return &toolspec.Result{ForLLM: fmt.Sprintf("QA %s", err.Error()), IsError: true}, nil
 		}
 	}
 
