@@ -2885,6 +2885,10 @@ func (r *Runner) buildQAPrompt(project, path string, task *global.Task) (string,
 	}
 
 	// 3.5. Include expected response schema with clear instructions
+        // 
+        // fail = "Work needs revision, send back to worker"
+        // escalate = "Cannot be resolved by QA, flag for escalation".
+        //
 	if taskSet, err := r.tasks.GetTaskSet(project, path); err == nil && taskSet.QAResponseTemplate != "" {
 		schema := r.loadSchemaContent(project, taskSet.QAResponseTemplate)
 		if schema != "" {
@@ -2892,9 +2896,9 @@ func (r *Runner) buildQAPrompt(project, path string, task *global.Task) (string,
 			sb.WriteString("IMPORTANT: You MUST respond with a valid JSON object that matches the schema below.\n")
 			sb.WriteString("Your response will be validated against this schema. If validation fails, you will be asked to retry.\n\n")
 			sb.WriteString("CRITICAL: Your JSON response MUST include a 'verdict' field with one of these exact values:\n")
-			sb.WriteString("  - \"pass\" - The work meets all requirements\n")
-			sb.WriteString("  - \"fail\" - The work has critical issues that cannot be resolved\n")
-			sb.WriteString("  - \"escalate\" - The work needs revision and should be sent back to the worker\n\n")
+                        sb.WriteString("  - \"pass\" - The work meets all requirements\n")
+                        sb.WriteString("  - \"fail\" - The work needs revision; it will be sent back to the worker (if retries remain)\n")
+                        sb.WriteString("  - \"escalate\" - The work cannot be fixed by revision; it is flagged for a human and NOT sent back to the worker\n\n")
 			sb.WriteString("Expected JSON Schema:\n```json\n")
 			sb.WriteString(schema)
 			sb.WriteString("\n```\n\n")
@@ -2904,7 +2908,7 @@ func (r *Runner) buildQAPrompt(project, path string, task *global.Task) (string,
 	// 3.6. If there was a previous schema error, include it for retry
 	if task.QA.Error != "" && task.QA.Invocations > 0 {
 		sb.WriteString("=== PREVIOUS ATTEMPT FAILED - PLEASE FIX ===\n\n")
-		sb.WriteString("Your previous response did not match the required schema. Please review the errors below and provide a corrected response.\n\n")
+		sb.WriteString("Your response did not match the required schema. Please review the errors below and provide a corrected response.\n\n")
 		sb.WriteString("Common mistakes to avoid:\n")
 		sb.WriteString("  - Using 'passed: true/false' instead of 'verdict: \"pass\"/\"fail\"'\n")
 		sb.WriteString("  - Using 'qa_verdict' instead of 'verdict'\n")
