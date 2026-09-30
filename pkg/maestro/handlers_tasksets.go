@@ -9,6 +9,7 @@ import (
 	"github.com/PivotLLM/toolspec"
 
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/PivotLLM/Maestro/global"
@@ -276,7 +277,7 @@ func (p *Provider) handleTaskSetReset(call *toolspec.ToolCall) (*toolspec.Result
 		return nil, fmt.Errorf("%s", "path is required")
 	}
 	if mode == "" {
-		return nil, fmt.Errorf("%s", "mode is required: specify 'all' to reset all tasks or 'failed' to reset only failed tasks")
+		return nil, fmt.Errorf("%s", "mode is required: specify 'all' to reset all tasks, 'failed' to reset only failed tasks or 'escalated' to reset only escalated tasks")
 	}
 
 	taskSet, resetCount, err := p.tasks.ResetTaskSet(project, path, mode, deleteResults)
@@ -305,9 +306,12 @@ func (p *Provider) handleTaskSetReset(call *toolspec.ToolCall) (*toolspec.Result
 	}
 
 	// Add message based on what happened
-	if mode == "all" {
+	switch mode {
+	case "all":
 		result["message"] = fmt.Sprintf("Reset %d tasks to waiting status.", resetCount)
-	} else {
+	case "escalated":
+		result["message"] = fmt.Sprintf("Reset %d escalated tasks to waiting status.", resetCount)
+	default:
 		result["message"] = fmt.Sprintf("Reset %d failed tasks to waiting status.", resetCount)
 	}
 
@@ -466,6 +470,16 @@ func (p *Provider) handleTaskList(call *toolspec.ToolCall) (*toolspec.Result, er
 	return createJSONResult(result)
 }
 
+// taskUpdateWorkStatuses are the values task_update accepts for work_status.
+var taskUpdateWorkStatuses = []string{
+	global.ExecutionStatusWaiting,
+	global.ExecutionStatusProcessing,
+	global.ExecutionStatusRetry,
+	global.ExecutionStatusFailed,
+	global.ExecutionStatusError,
+	global.ExecutionStatusDone,
+}
+
 // handleTaskUpdate handles the task_update MCP tool
 func (p *Provider) handleTaskUpdate(call *toolspec.ToolCall) (*toolspec.Result, error) {
 	project := parseString(call.Args, "project", "")
@@ -516,12 +530,18 @@ func (p *Provider) handleTaskUpdate(call *toolspec.ToolCall) (*toolspec.Result, 
 	if taskType != "" {
 		updates["type"] = taskType
 	}
-	if workStatus != "" {
-		updates["work_status"] = workStatus
-	}
 
 	// Work execution updates
 	workUpdates := make(map[string]interface{})
+	if workStatus != "" {
+		if !slices.Contains(taskUpdateWorkStatuses, workStatus) {
+			return &toolspec.Result{
+				ForLLM:  fmt.Sprintf("invalid work_status %q: must be one of %s", workStatus, strings.Join(taskUpdateWorkStatuses, ", ")),
+				IsError: true,
+			}, nil
+		}
+		workUpdates["status"] = workStatus
+	}
 	if instructionsFile != "" {
 		workUpdates["instructions_file"] = instructionsFile
 	}

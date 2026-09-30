@@ -905,7 +905,8 @@ func (s *Service) GetMutex(project string) *sync.Mutex {
 }
 
 // ResetTaskSet resets tasks in a task set based on the mode parameter.
-// mode must be "all" (reset all tasks) or "failed" (reset only failed tasks).
+// mode must be "all" (reset all tasks), "failed" (reset only failed tasks) or
+// "escalated" (reset only tasks whose QA verdict was escalate).
 // Returns the updated task set and the count of tasks that were reset.
 func (s *Service) ResetTaskSet(project, path, mode string, deleteResults bool) (*global.TaskSet, int, error) {
 	if err := validatePath(path); err != nil {
@@ -917,8 +918,8 @@ func (s *Service) ResetTaskSet(project, path, mode string, deleteResults bool) (
 	}
 
 	// Validate mode parameter
-	if mode != "all" && mode != "failed" {
-		return nil, 0, fmt.Errorf("mode is required: specify 'all' to reset all tasks or 'failed' to reset only failed tasks")
+	if mode != "all" && mode != "failed" && mode != "escalated" {
+		return nil, 0, fmt.Errorf("mode is required: specify 'all' to reset all tasks, 'failed' to reset only failed tasks or 'escalated' to reset only escalated tasks")
 	}
 
 	var taskSet *global.TaskSet
@@ -948,6 +949,9 @@ func (s *Service) ResetTaskSet(project, path, mode string, deleteResults bool) (
 					task.Work.Status == global.ExecutionStatusError ||
 					(task.QA.Enabled && (task.QA.Status == global.ExecutionStatusFailed ||
 						task.QA.Status == global.ExecutionStatusError))
+			case "escalated":
+				// Reset only tasks whose QA escalated (stored as done with verdict escalate)
+				shouldReset = task.QA.Enabled && task.QA.Verdict == global.QAVerdictEscalate
 			}
 
 			if !shouldReset {

@@ -148,7 +148,7 @@ Use this phase when:
      taskset_reset(
        project="<project>",
        path="analysis",
-       mode="all",           # Required: "all" resets every task, "failed" resets only failed tasks
+       mode="all",           # Required: "all" resets every task, "failed" only failed tasks, "escalated" only tasks QA escalated
        delete_results=true   # Removes results files from disk (default: true)
      )
      ```
@@ -173,7 +173,7 @@ Use this phase when:
 - `list_list` – list available lists in the project
 - `list_get`, `list_get_summary` – read list contents
 - `taskset_create` – create task sets
-- `taskset_reset` – reset all tasks in a task set for re-execution
+- `taskset_reset` – reset all, failed or escalated tasks in a task set for re-execution
 - `list_create_tasks` – create one task per list item
 - `task_create` – create individual tasks
 - `task_run` – execute eligible tasks

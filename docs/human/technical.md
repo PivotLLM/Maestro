@@ -610,7 +610,7 @@ Reset tasks in a task set for re-execution:
 taskset_reset(
   project: "my-project",
   path: "analysis",
-  mode: "all",           # Required: "all" or "failed"
+  mode: "all",           # Required: "all", "failed" or "escalated"
   delete_results: true,  # Optional: delete result files (default: true)
   end_report: true       # Optional: end active report session (default: false)
 )
@@ -620,13 +620,14 @@ taskset_reset(
 |-----------|----------|-------------|
 | `project` | Yes | Project name |
 | `path` | Yes | Task set path |
-| `mode` | Yes | Reset mode: `"all"` (all tasks) or `"failed"` (only failed tasks) |
+| `mode` | Yes | Reset mode: `"all"` (all tasks), `"failed"` (only failed tasks) or `"escalated"` (only tasks QA escalated) |
 | `delete_results` | No | Delete result files from disk (default: true) |
 | `end_report` | No | End active report session after reset (default: false) |
 
 **Mode Explanation:**
 - `"all"`: Resets all tasks to waiting status, regardless of current status
 - `"failed"`: Only resets tasks with status `failed`, leaving `done` tasks unchanged
+- `"escalated"`: Only resets tasks whose QA verdict was `escalate`; these are stored as `done`, so `"failed"` does not reach them
 
 **When `end_report=true`:**
 - The response includes a reminder to call `report_write` (action=start) before running tasks

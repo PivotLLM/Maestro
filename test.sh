@@ -1683,7 +1683,12 @@ run_test "7.5.4 Reset with mode=failed" \
 run_test_expect_fail "7.5.5 Reset with invalid mode fails" \
     "taskset_reset" \
     "{\"project\":\"$TEST_PROJECT\",\"path\":\"analysis\",\"mode\":\"invalid\"}" \
-    "must be"
+    "'escalated'"
+
+run_test "7.5.6 Reset with mode=escalated (none escalated)" \
+    "taskset_reset" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"analysis\",\"mode\":\"escalated\"}" \
+    '"tasks_reset":0'
 
 print_subsection "7.6 Delete Task Set"
 run_test "7.6.1 Delete nested task set" \
