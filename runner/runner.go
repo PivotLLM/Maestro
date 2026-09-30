@@ -48,7 +48,7 @@ type Runner struct {
 	// host (e.g. ClawEh) that owns model selection. In that mode Maestro does not
 	// resolve, validate, or require any model of its own — it just hands the
 	// prompt to the host and lets it pick the model.
-	hostDispatched  bool
+	hostDispatched  atomic.Bool
 	runningProjects sync.Map       // map[string]bool - tracks which projects have runs in progress
 	taskHistory     sync.Map       // map[string][]global.Message - accumulates history by task UUID
 	activeRuns      sync.WaitGroup // tracks active run goroutines for graceful shutdown
@@ -340,7 +340,10 @@ func New(cfg *config.Config, logger *logging.Logger, lib *library.Service, playb
 // SetHostDispatched marks the runner as driven by a host-injected dispatcher that
 // owns model selection. In that mode the runner does not resolve or validate any
 // Maestro LLM — it dispatches the prompt and lets the host choose the model.
-func (r *Runner) SetHostDispatched(v bool) { r.hostDispatched = v }
+//
+// It may be called again while a run is in progress (an embedding host
+// re-registers the provider on the same runner), hence the atomic flag.
+func (r *Runner) SetHostDispatched(v bool) { r.hostDispatched.Store(v) }
 
 // detachContext returns a context for an asynchronous run: it carries every
 // value from the caller's request context (so a host dispatcher sees the same
@@ -360,7 +363,7 @@ func detachContext(ctx context.Context) context.Context {
 // the host ignores it). ok is false only in standalone mode when no LLM is
 // available.
 func (r *Runner) dispatchLLMID(requested string) (id string, ok bool) {
-	if r.hostDispatched {
+	if r.hostDispatched.Load() {
 		if requested != "" && requested != "default" {
 			return requested, true // preserve any explicit hint for logs only
 		}
@@ -838,8 +841,11 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest, notify Complet
 		notify:        notify,
 	}
 
-	// Async execution - return immediately
+	// Async execution - return immediately. The goroutine keeps updating result
+	// (TasksExecuted and friends), so the caller gets a snapshot taken before it
+	// starts rather than a pointer it would read while the run writes to it.
 	result.Message = fmt.Sprintf("%d tasks queued for execution", len(eligibleTasks))
+	snapshot := *result
 	r.activeRuns.Add(1)
 	go func() {
 		defer r.activeRuns.Done()
@@ -847,7 +853,7 @@ func (r *Runner) Run(ctx context.Context, req *global.RunRequest, notify Complet
 		r.executeRun(execParams)
 	}()
 
-	return result, nil
+	return &snapshot, nil
 }
 
 // runExecutionParams holds parameters for task execution

@@ -14,7 +14,8 @@ import (
 // model. An empty/"default" request yields the neutral "host" label; an explicit
 // id is preserved verbatim (for logging only). No config is consulted.
 func TestDispatchLLMID_HostDispatched(t *testing.T) {
-	r := &Runner{hostDispatched: true} // nil config: must not be touched
+	r := &Runner{} // nil config: must not be touched
+	r.SetHostDispatched(true)
 
 	cases := map[string]string{
 		"":           "host",
@@ -40,7 +41,7 @@ func TestDispatchLLMID_StandaloneNoLLMs(t *testing.T) {
 	if err := cfg.Prepare(); err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	r := &Runner{hostDispatched: false, config: cfg}
+	r := &Runner{config: cfg}
 
 	if _, ok := r.dispatchLLMID(""); ok {
 		t.Error("standalone with no LLMs: expected ok=false")
