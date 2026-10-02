@@ -471,12 +471,12 @@ func (p *Provider) handleTaskList(call *toolspec.ToolCall) (*toolspec.Result, er
 }
 
 // taskUpdateWorkStatuses are the values task_update accepts for work_status.
+// processing, failed and error are set by the runner only: a task marked
+// processing by hand is never picked up again, and failed/error record an
+// outcome the runner observed.
 var taskUpdateWorkStatuses = []string{
 	global.ExecutionStatusWaiting,
-	global.ExecutionStatusProcessing,
 	global.ExecutionStatusRetry,
-	global.ExecutionStatusFailed,
-	global.ExecutionStatusError,
 	global.ExecutionStatusDone,
 }
 

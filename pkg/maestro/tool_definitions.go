@@ -734,7 +734,7 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 				{Name: "uuid", Type: "string", Description: "Task UUID", Required: false},
 				{Name: "title", Type: "string", Description: "New title (optional)", Required: false},
 				{Name: "type", Type: "string", Description: "New type (optional)", Required: false},
-				{Name: "work_status", Type: "string", Description: "New work status (optional): waiting, processing, retry, failed, error or done. Only the status changes: invocation counts, QA state and the result file are kept, so a task whose work already finished is not re-run. Use taskset_reset to re-run tasks from scratch.", Required: false},
+				{Name: "work_status", Type: "string", Description: "New work status (optional): waiting, retry or done. processing, failed and error are set by the runner only. Only the status changes: invocation counts, QA state and the result file are kept, so a task whose work already finished is not re-run. Use taskset_reset to re-run tasks from scratch.", Required: false},
 				{Name: "instructions_file", Type: "string", Description: "Path to instructions file (validated before update)", Required: false},
 				{Name: "instructions_file_source", Type: "string", Description: "Source for instructions_file: 'project', 'playbook', or 'reference'", Required: false},
 				{Name: "instructions_text", Type: "string", Description: "Inline instructions text", Required: false},

@@ -70,8 +70,35 @@ func TestHandleTaskUpdate_WorkStatus(t *testing.T) {
 		{
 			name:       "unknown status is rejected",
 			args:       map[string]any{"work_status": "bogus"},
-			wantError:  `invalid work_status "bogus": must be one of waiting, processing, retry, failed, error, done`,
+			wantError:  `invalid work_status "bogus": must be one of waiting, retry, done`,
 			wantStatus: global.ExecutionStatusFailed,
+			wantTitle:  "Alice",
+		},
+		{
+			name:       "processing is runner-only and rejected",
+			args:       map[string]any{"work_status": "processing"},
+			wantError:  `invalid work_status "processing": must be one of waiting, retry, done`,
+			wantStatus: global.ExecutionStatusFailed,
+			wantTitle:  "Alice",
+		},
+		{
+			name:       "failed is runner-only and rejected",
+			args:       map[string]any{"work_status": "failed"},
+			wantError:  `invalid work_status "failed": must be one of waiting, retry, done`,
+			wantStatus: global.ExecutionStatusFailed,
+			wantTitle:  "Alice",
+		},
+		{
+			name:       "error is runner-only and rejected",
+			args:       map[string]any{"work_status": "error"},
+			wantError:  `invalid work_status "error": must be one of waiting, retry, done`,
+			wantStatus: global.ExecutionStatusFailed,
+			wantTitle:  "Alice",
+		},
+		{
+			name:       "done is accepted",
+			args:       map[string]any{"work_status": "done"},
+			wantStatus: global.ExecutionStatusDone,
 			wantTitle:  "Alice",
 		},
 		{
