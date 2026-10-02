@@ -19,8 +19,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/PivotLLM/Maestro/app"
 	"github.com/PivotLLM/Maestro/config"
-	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/lists"
 	"github.com/PivotLLM/Maestro/llm"
 	"github.com/PivotLLM/Maestro/logging"
@@ -77,8 +77,8 @@ func New(cfg *config.Config, logger *logging.Logger) (*Server, error) {
 
 	// Create MCP server
 	mcpServer := server.NewMCPServer(
-		global.ProgramName,
-		global.Version,
+		app.Name(),
+		app.SemVer(),
 		server.WithToolCapabilities(true),
 		server.WithLogging(),
 	)
