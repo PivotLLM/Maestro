@@ -126,13 +126,22 @@ TEST_PLAYBOOK="test-playbook"
 TEST_PLAYBOOK2="test-playbook2"
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+# Colours: off when stdout is not a terminal or NO_COLOR is set. This script
+# runs under /bin/sh, so the escape byte is produced with printf (POSIX) and
+# stored in the variables; plain echo then renders it in dash, bash and zsh
+# alike, whereas a '\033' string would be printed literally by bash's echo.
+if [ -t 1 ] && [ -z "${NO_COLOR+x}" ]; then
+    ESC=$(printf '\033')
+    RED="${ESC}[0;31m"
+    GREEN="${ESC}[0;32m"
+    YELLOW="${ESC}[1;33m"
+    BLUE="${ESC}[0;34m"
+    CYAN="${ESC}[0;36m"
+    BOLD="${ESC}[1m"
+    NC="${ESC}[0m" # No Color
+else
+    RED='' GREEN='' YELLOW='' BLUE='' CYAN='' BOLD='' NC=''
+fi
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -1683,7 +1692,12 @@ run_test "7.5.4 Reset with mode=failed" \
 run_test_expect_fail "7.5.5 Reset with invalid mode fails" \
     "taskset_reset" \
     "{\"project\":\"$TEST_PROJECT\",\"path\":\"analysis\",\"mode\":\"invalid\"}" \
-    "must be"
+    "'escalated'"
+
+run_test "7.5.6 Reset with mode=escalated (none escalated)" \
+    "taskset_reset" \
+    "{\"project\":\"$TEST_PROJECT\",\"path\":\"analysis\",\"mode\":\"escalated\"}" \
+    '"tasks_reset":0'
 
 print_subsection "7.6 Delete Task Set"
 run_test "7.6.1 Delete nested task set" \

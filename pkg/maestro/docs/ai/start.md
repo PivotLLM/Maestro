@@ -300,7 +300,7 @@ task_report(project="my-project", format="markdown")
 taskset_reset(
   project="my-project",
   path="analysis",
-  mode="all",           # Required: "all" resets every task, "failed" resets only failed tasks
+  mode="all",           # Required: "all" resets every task, "failed" only failed tasks, "escalated" only tasks QA escalated
   delete_results=true   # Removes results files from disk (default)
 )
 ```

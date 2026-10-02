@@ -25,12 +25,17 @@ import (
 
 // Service provides project management operations
 type Service struct {
-	config       *config.Config
-	logger       *logging.Logger
-	projectMutex sync.Map
+	config *config.Config
+	logger *logging.Logger
 	// importAllowed, when set, gates every path ImportFiles reads (see SetImportAllowed).
-	importAllowed func(absPath string) bool // map[string]*sync.Mutex for per-project locking
+	importAllowed func(absPath string) bool
 }
+
+// projectMutexes holds one mutex per project directory (absolute path), shared
+// by every Service in the process. An embedding host may build more than one
+// Service over the same base directory (one per provider registration), and
+// they must still exclude each other on a project's read-modify-write paths.
+var projectMutexes sync.Map // map[string]*sync.Mutex
 
 // ProjectInfo is returned by List operations
 type ProjectInfo struct {
@@ -62,9 +67,8 @@ var projectNameRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 // NewService creates a new projects service
 func NewService(cfg *config.Config, logger *logging.Logger) *Service {
 	return &Service{
-		config:       cfg,
-		logger:       logger,
-		projectMutex: sync.Map{},
+		config: cfg,
+		logger: logger,
 	}
 }
 
@@ -92,9 +96,15 @@ func (s *Service) importPermitted(p string) bool {
 	return s.importAllowed(abs)
 }
 
-// getProjectMutex gets or creates a mutex for a specific project
+// getProjectMutex gets or creates the process-wide mutex for a project, keyed
+// by the project's absolute directory so Services on the same base directory
+// share it and Services on different base directories do not.
 func (s *Service) getProjectMutex(project string) *sync.Mutex {
-	value, _ := s.projectMutex.LoadOrStore(project, &sync.Mutex{})
+	key := s.getProjectDir(project)
+	if abs, err := filepath.Abs(key); err == nil {
+		key = abs
+	}
+	value, _ := projectMutexes.LoadOrStore(key, &sync.Mutex{})
 	return value.(*sync.Mutex)
 }
 

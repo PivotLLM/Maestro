@@ -669,7 +669,7 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 			Parameters: []toolspec.Parameter{
 				{Name: "project", Type: "string", Description: "Project name", Required: false},
 				{Name: "path", Type: "string", Description: "Task set path", Required: false},
-				{Name: "mode", Type: "string", Description: "Reset mode: 'all' to reset all tasks, 'failed' to reset only failed tasks", Required: false},
+				{Name: "mode", Type: "string", Description: "Reset mode: 'all' to reset all tasks, 'failed' to reset only failed tasks, 'escalated' to reset only tasks whose QA verdict was escalate", Required: false},
 				{Name: "delete_results", Type: "boolean", Description: "Delete results files from disk (default: true)", Required: false},
 				{Name: "end_report", Type: "boolean", Description: "End the current report session (default: false). When true, response includes reminder to call report_write (action=start) before running tasks.", Required: false},
 			},
@@ -734,7 +734,7 @@ func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {
 				{Name: "uuid", Type: "string", Description: "Task UUID", Required: false},
 				{Name: "title", Type: "string", Description: "New title (optional)", Required: false},
 				{Name: "type", Type: "string", Description: "New type (optional)", Required: false},
-				{Name: "work_status", Type: "string", Description: "New work status (optional)", Required: false},
+				{Name: "work_status", Type: "string", Description: "New work status (optional): waiting, retry or done. processing, failed and error are set by the runner only. Only the status changes: invocation counts, QA state and the result file are kept, so a task whose work already finished is not re-run. Use taskset_reset to re-run tasks from scratch.", Required: false},
 				{Name: "instructions_file", Type: "string", Description: "Path to instructions file (validated before update)", Required: false},
 				{Name: "instructions_file_source", Type: "string", Description: "Source for instructions_file: 'project', 'playbook', or 'reference'", Required: false},
 				{Name: "instructions_text", Type: "string", Description: "Inline instructions text", Required: false},

@@ -104,7 +104,7 @@ The Makefile is the interface (see `~/.claude/standards/makefile.md`):
 
 ```bash
 make            # run the full test suite, then build ./maestro (only if tests pass)
-make test       # the one gate: go vet, go test -race -count=1, and ./test.sh (451 MCP checks)
+make test       # the one gate: go vet, go test -race -count=1, and ./test.sh (452 MCP checks)
 make build      # build ./maestro at the project root, no tests
 make clean      # remove ./maestro, test artifacts and the Go test cache
 make install    # install ./maestro: /usr/local/bin as root, otherwise ~/bin (must exist)
