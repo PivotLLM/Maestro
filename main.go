@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/PivotLLM/Maestro/app"
 	"github.com/PivotLLM/Maestro/config"
 	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/logging"
@@ -36,7 +37,12 @@ func main() {
 
 	// Handle version flag
 	if *version {
-		fmt.Printf("%s v%s\n", global.ProgramName, global.Version)
+		buildTime, goVersion := app.BuildInfo()
+		fmt.Printf("%s %s\n%s\n%s\n", app.Name(), app.Version(), app.TagLine(), app.Copyright())
+		if buildTime != "" {
+			fmt.Printf("Built: %s\n", buildTime)
+		}
+		fmt.Printf("Go: %s\n", goVersion)
 		return
 	}
 
@@ -75,7 +81,8 @@ func main() {
 	logger.SetLevel(cfg.LogLevel())
 
 	// Announce startup
-	logger.Infof("%s v%s starting", global.ProgramName, global.Version)
+	logger.Infof("%s %s starting", app.Name(), app.Version())
+	logger.Info(app.Copyright())
 	logger.Infof("Using configuration file: %s", cfg.ConfigPath())
 
 	// Log first-run message
@@ -131,7 +138,7 @@ func main() {
 }
 
 func showHelp() {
-	fmt.Printf(`%s v%s - MCP Server for LLM Orchestration
+	fmt.Printf(`%s %s - %s
 
 USAGE:
     %s [OPTIONS]
@@ -187,14 +194,14 @@ ENVIRONMENT:
 
 For more information, call start_here, or use the file_list and file_get
 tools with source="reference" to access the embedded documentation.
-`, global.ProgramName, global.Version,
-		global.ProgramName,
+`, app.Name(), app.Version(), app.TagLine(),
+		app.Name(),
 		global.DefaultBaseDir, global.DefaultConfigFileName,
 		global.DefaultBaseDir,
-		global.ProgramName,
+		app.Name(),
 		global.DefaultBaseDir, global.DefaultConfigFileName,
-		global.ProgramName,
-		global.ProgramName,
-		global.ProgramName,
-		global.ProgramName)
+		app.Name(),
+		app.Name(),
+		app.Name(),
+		app.Name())
 }

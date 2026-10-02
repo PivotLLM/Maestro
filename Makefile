@@ -17,6 +17,15 @@ GO       ?= go
 PROBE    ?= probe
 TEST_LOG := .test-go.log
 
+GIT_COMMIT=$(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME=$(shell date +%FT%T%z)
+GO_VERSION=$(shell go version | awk '{print $$3}')
+# BUILD_NUMBER orders builds; GIT_COMMIT identifies their source. UTC, and
+# assigned with := so every target in one make run gets the same number.
+BUILD_NUMBER:=$(shell date -u +%Y%m%d%H%M%S)
+APP_PKG=github.com/PivotLLM/Maestro/app
+LDFLAGS=-ldflags "-X $(APP_PKG).gitCommit=$(GIT_COMMIT) -X $(APP_PKG).buildTime=$(BUILD_TIME) -X $(APP_PKG).goVersion=$(GO_VERSION) -X $(APP_PKG).buildNumber=$(BUILD_NUMBER) -s -w"
+
 # Install destination: machine-wide for root, per-user otherwise. Override with
 # INSTALL_DIR=... to install elsewhere.
 ifeq ($(shell id -u),0)
@@ -29,7 +38,7 @@ all: test build
 
 ## build: compile the maestro binary at the project root.
 build:
-	$(GO) build -o $(BINARY) .
+	$(GO) build $(LDFLAGS) -o $(BINARY) .
 
 ## test: the full regression suite. Exits non-zero on any failure.
 test:
