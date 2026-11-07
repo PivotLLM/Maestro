@@ -284,6 +284,7 @@ func (p *Provider) handleTaskReport(call *toolspec.ToolCall) (*toolspec.Result, 
 		reporting.WithPlaybookLoader(playbookLoader),
 		reporting.WithReferenceLoader(referenceLoader),
 		reporting.WithProjectLoader(projectLoader),
+		reporting.WithFileModes(p.config.DirMode(), p.config.FileMode()),
 	)
 	report := reporter.BuildReport(project, taskSetList.TaskSets, filter, resultsDir)
 

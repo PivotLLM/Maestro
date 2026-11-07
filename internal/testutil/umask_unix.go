@@ -13,12 +13,12 @@ import (
 	"testing"
 )
 
-// ZeroUmask sets the process umask to 0 for the rest of the test and restores
-// the previous value on cleanup, so created files get exactly the mode passed
-// to the call that created them. The umask is process-wide: tests that use
-// this must not run in parallel.
-func ZeroUmask(t testing.TB) {
+// NarrowUmask sets the process umask to 0o077 for the rest of the test and
+// restores the previous value on cleanup, so a mode that loses its group or
+// other bits shows the umask was not overridden. The umask is process-wide:
+// tests that use this must not run in parallel.
+func NarrowUmask(t testing.TB) {
 	t.Helper()
-	old := syscall.Umask(0)
+	old := syscall.Umask(0o077)
 	t.Cleanup(func() { syscall.Umask(old) })
 }

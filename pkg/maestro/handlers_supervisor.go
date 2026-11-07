@@ -142,7 +142,7 @@ func (p *Provider) handleSupervisorUpdate(call *toolspec.ToolCall) (*toolspec.Re
 		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to marshal result: %v", err), IsError: true}, nil
 	}
 
-	if err := os.WriteFile(resultPath, newResultData, p.config.FileMode()); err != nil {
+	if err := global.WriteFileExact(resultPath, newResultData, p.config.FileMode()); err != nil {
 		return &toolspec.Result{ForLLM: fmt.Sprintf("failed to save result: %v", err), IsError: true}, nil
 	}
 

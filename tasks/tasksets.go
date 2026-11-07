@@ -94,9 +94,17 @@ func (s *Service) withLock(project, path string, fn func() error) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(lockPath)
-	if err := os.MkdirAll(dir, s.config.DirMode()); err != nil {
+	if err := global.MkdirAllExact(dir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create tasks directory: %w", err)
 	}
+
+	// flock creates the lock file through the umask; create it first with
+	// exactly the configured mode.
+	lockFile, err := global.OpenFileExact(lockPath, os.O_RDONLY|os.O_CREATE, s.config.FileMode())
+	if err != nil {
+		return fmt.Errorf("failed to create lock file: %w", err)
+	}
+	_ = lockFile.Close()
 
 	lock := flock.New(lockPath, flock.SetPermissions(s.config.FileMode()))
 	if err := lock.Lock(); err != nil {
@@ -136,7 +144,7 @@ func (s *Service) saveTaskSet(project, path string, taskSet *global.TaskSet) err
 
 	// Ensure directory exists
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, s.config.DirMode()); err != nil {
+	if err := global.MkdirAllExact(dir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create tasks directory: %w", err)
 	}
 
@@ -150,15 +158,8 @@ func (s *Service) saveTaskSet(project, path string, taskSet *global.TaskSet) err
 		return fmt.Errorf("failed to marshal task set: %w", err)
 	}
 
-	// Atomic write
-	tempPath := filePath + ".tmp"
-	if err := os.WriteFile(tempPath, data, s.config.FileMode()); err != nil {
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-
-	if err := os.Rename(tempPath, filePath); err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("failed to rename temp file: %w", err)
+	if err := global.AtomicWrite(filePath, data, s.config.DirMode(), s.config.FileMode()); err != nil {
+		return fmt.Errorf("failed to write task set: %w", err)
 	}
 
 	return nil

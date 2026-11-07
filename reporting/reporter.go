@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -41,6 +42,8 @@ type Reporter struct {
 	playbookLoader  ContentLoader // accepts paths in format "playbook-name/path/to/file"
 	referenceLoader ContentLoader
 	templateCache   map[string]*template.Template
+	dirMode         fs.FileMode
+	fileMode        fs.FileMode
 }
 
 // Option configures a Reporter
@@ -68,11 +71,26 @@ func WithReferenceLoader(loader ContentLoader) Option {
 	}
 }
 
+// WithFileModes sets the permission modes SaveReport gives the folders and
+// files it creates. A zero value keeps the default.
+func WithFileModes(dir, file fs.FileMode) Option {
+	return func(r *Reporter) {
+		if dir != 0 {
+			r.dirMode = dir
+		}
+		if file != 0 {
+			r.fileMode = file
+		}
+	}
+}
+
 // New creates a new Reporter
 func New(logger *logging.Logger, opts ...Option) *Reporter {
 	r := &Reporter{
 		logger:        logger,
 		templateCache: make(map[string]*template.Template),
+		dirMode:       global.DefaultDirMode,
+		fileMode:      global.DefaultFileMode,
 	}
 
 	for _, opt := range opts {
@@ -795,11 +813,11 @@ func (r *Reporter) SaveReport(report *ProjectReport, outputPath, format string) 
 
 	// Ensure directory exists
 	dir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(dir, global.DefaultDirMode); err != nil {
+	if err := global.MkdirAllExact(dir, r.dirMode); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, []byte(content), global.DefaultFileMode); err != nil {
+	if err := global.WriteFileExact(outputPath, []byte(content), r.fileMode); err != nil {
 		return fmt.Errorf("failed to write report: %w", err)
 	}
 

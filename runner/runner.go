@@ -244,7 +244,7 @@ type ValidationErrorDetails struct {
 // Returns the filename (not full path) for logging
 func (r *Runner) writeErrorFile(project string, details *ValidationErrorDetails) (string, error) {
 	resultsDir := r.tasks.GetResultsDir(project)
-	if err := os.MkdirAll(resultsDir, r.config.DirMode()); err != nil {
+	if err := global.MkdirAllExact(resultsDir, r.config.DirMode()); err != nil {
 		return "", fmt.Errorf("failed to create results directory: %w", err)
 	}
 
@@ -256,7 +256,7 @@ func (r *Runner) writeErrorFile(project string, details *ValidationErrorDetails)
 		return "", fmt.Errorf("failed to marshal error details: %w", err)
 	}
 
-	if err := os.WriteFile(filePath, data, r.config.FileMode()); err != nil {
+	if err := global.WriteFileExact(filePath, data, r.config.FileMode()); err != nil {
 		return "", fmt.Errorf("failed to write error file: %w", err)
 	}
 
@@ -331,7 +331,7 @@ func New(cfg *config.Config, logger *logging.Logger, lib *library.Service, playb
 		llm:         llmSvc,
 		tasks:       tasksSvc,
 		projects:    projectsSvc,
-		reporter:    reporting.New(logger, reporting.WithPlaybookLoader(playbookLoader), reporting.WithReferenceLoader(referenceLoader)),
+		reporter:    reporting.New(logger, reporting.WithPlaybookLoader(playbookLoader), reporting.WithReferenceLoader(referenceLoader), reporting.WithFileModes(cfg.DirMode(), cfg.FileMode())),
 		validator:   templates.New(logger),
 		rateLimiter: NewRateLimiter(runnerConfig.RateLimit.MaxRequests, runnerConfig.RateLimit.PeriodSeconds),
 	}
@@ -2100,14 +2100,14 @@ func (r *Runner) finishTask(project, path string, task *global.Task, response, e
 
 		// Save individual result file
 		resultsDir := r.tasks.GetResultsDir(project)
-		if err := os.MkdirAll(resultsDir, r.config.DirMode()); err != nil {
+		if err := global.MkdirAllExact(resultsDir, r.config.DirMode()); err != nil {
 			r.logger.Warnf("Task %d: Failed to create results directory: %v", task.ID, err)
 		} else {
 			resultFilename := task.UUID + ".json"
 			resultPath := filepath.Join(resultsDir, resultFilename)
 			resultData, err := json.MarshalIndent(taskResult, "", "  ")
 			if err == nil {
-				if writeErr := os.WriteFile(resultPath, resultData, r.config.FileMode()); writeErr != nil {
+				if writeErr := global.WriteFileExact(resultPath, resultData, r.config.FileMode()); writeErr != nil {
 					r.logger.Warnf("Task %d: Failed to save result file: %v", task.ID, writeErr)
 				} else {
 					r.logger.Infof("Task %d: Results written to %s (%d bytes)", task.ID, resultFilename, len(resultData))
@@ -2185,7 +2185,7 @@ func (r *Runner) writeFailedTaskResult(project string, task *global.Task, fullPr
 	}
 
 	resultsDir := r.tasks.GetResultsDir(project)
-	if err := os.MkdirAll(resultsDir, r.config.DirMode()); err != nil {
+	if err := global.MkdirAllExact(resultsDir, r.config.DirMode()); err != nil {
 		r.logger.Warnf("Task %d: Failed to create results directory: %v", task.ID, err)
 		return
 	}
@@ -2198,7 +2198,7 @@ func (r *Runner) writeFailedTaskResult(project string, task *global.Task, fullPr
 		return
 	}
 
-	if writeErr := os.WriteFile(resultPath, resultData, r.config.FileMode()); writeErr != nil {
+	if writeErr := global.WriteFileExact(resultPath, resultData, r.config.FileMode()); writeErr != nil {
 		r.logger.Warnf("Task %d: Failed to save failed result file: %v", task.ID, writeErr)
 	} else {
 		r.logger.Infof("Task %d: Failed task results written to %s (%d bytes)", task.ID, resultFilename, len(resultData))
@@ -2825,7 +2825,7 @@ func (r *Runner) executeQA(ctx context.Context, project, path string, task *glob
 			// Save updated result
 			updatedData, err := json.MarshalIndent(taskResult, "", "  ")
 			if err == nil {
-				if writeErr := os.WriteFile(resultPath, updatedData, r.config.FileMode()); writeErr != nil {
+				if writeErr := global.WriteFileExact(resultPath, updatedData, r.config.FileMode()); writeErr != nil {
 					r.logger.Warnf("Task %d: Failed to save QA result to file: %v", task.ID, writeErr)
 				} else {
 					r.logger.Infof("Task %d: QA results written to %s (%d bytes)", task.ID, resultFilename, len(updatedData))
@@ -3137,14 +3137,14 @@ func (r *Runner) reviseWork(ctx context.Context, project, path string, task *glo
 	}
 
 	// Save individual result file
-	if err := os.MkdirAll(resultsDir, r.config.DirMode()); err != nil {
+	if err := global.MkdirAllExact(resultsDir, r.config.DirMode()); err != nil {
 		r.logger.Warnf("Task %d: Failed to create results directory: %v", task.ID, err)
 	} else {
 		resultFilename := task.UUID + ".json"
 		resultPath := filepath.Join(resultsDir, resultFilename)
 		resultData, err := json.MarshalIndent(taskResult, "", "  ")
 		if err == nil {
-			if writeErr := os.WriteFile(resultPath, resultData, r.config.FileMode()); writeErr != nil {
+			if writeErr := global.WriteFileExact(resultPath, resultData, r.config.FileMode()); writeErr != nil {
 				r.logger.Warnf("Task %d: Failed to save result file: %v", task.ID, writeErr)
 			} else {
 				r.logger.Infof("Task %d: Revised results written to %s (%d bytes)", task.ID, resultFilename, len(resultData))

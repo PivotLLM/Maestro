@@ -18,13 +18,13 @@ import (
 // TestNew_FileModes: New creates the log directory and file with the given
 // modes, and treats a zero mode as the default.
 func TestNew_FileModes(t *testing.T) {
-	testutil.ZeroUmask(t)
+	testutil.NarrowUmask(t)
 	tests := []struct {
 		name              string
 		dirMode, fileMode fs.FileMode
 		wantDir, wantFile fs.FileMode
 	}{
-		{"configured", 0o750, 0o640, 0o750, 0o640},
+		{"configured", 0o770, 0o660, 0o770, 0o660},
 		{"zero means default", 0, 0, 0o755, 0o644},
 	}
 	for _, tt := range tests {

@@ -22,8 +22,8 @@ import (
 // TestFileModes_TaskSetFile: the tasks directory, the task set JSON file and
 // its lock file are created with the modes from config.WithFileModes.
 func TestFileModes_TaskSetFile(t *testing.T) {
-	testutil.ZeroUmask(t)
-	const dirMode, fileMode fs.FileMode = 0o750, 0o640
+	testutil.NarrowUmask(t)
+	const dirMode, fileMode fs.FileMode = 0o770, 0o660
 
 	cfg := config.New(config.WithBaseDir(t.TempDir()), config.WithFileModes(dirMode, fileMode))
 	if err := cfg.Prepare(); err != nil {

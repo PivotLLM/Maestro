@@ -20,13 +20,13 @@ import (
 // TestWithFileModes_ReachCreatedFiles: the modes from WithFileModes (or exactly
 // the defaults without it) reach the lists directory and the list file.
 func TestWithFileModes_ReachCreatedFiles(t *testing.T) {
-	testutil.ZeroUmask(t)
+	testutil.NarrowUmask(t)
 	tests := []struct {
 		name              string
 		opts              []Option
 		wantDir, wantFile fs.FileMode
 	}{
-		{"configured", []Option{WithFileModes(0o750, 0o640)}, 0o750, 0o640},
+		{"configured", []Option{WithFileModes(0o770, 0o660)}, 0o770, 0o660},
 		{"default", nil, 0o755, 0o644},
 	}
 	for _, tt := range tests {
