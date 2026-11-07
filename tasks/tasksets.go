@@ -94,11 +94,11 @@ func (s *Service) withLock(project, path string, fn func() error) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(lockPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create tasks directory: %w", err)
 	}
 
-	lock := flock.New(lockPath)
+	lock := flock.New(lockPath, flock.SetPermissions(s.config.FileMode()))
 	if err := lock.Lock(); err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
@@ -136,7 +136,7 @@ func (s *Service) saveTaskSet(project, path string, taskSet *global.TaskSet) err
 
 	// Ensure directory exists
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create tasks directory: %w", err)
 	}
 
@@ -152,7 +152,7 @@ func (s *Service) saveTaskSet(project, path string, taskSet *global.TaskSet) err
 
 	// Atomic write
 	tempPath := filePath + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	if err := os.WriteFile(tempPath, data, s.config.FileMode()); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 

@@ -13,6 +13,7 @@ import (
 	"github.com/PivotLLM/toolspec"
 
 	"github.com/PivotLLM/Maestro/config"
+	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/llm"
 	"github.com/PivotLLM/Maestro/logging"
 	"github.com/PivotLLM/Maestro/reference"
@@ -136,7 +137,7 @@ func TestHostDispatchStartText_NoMarkers(t *testing.T) {
 // through the tool, must no longer advertise the LLM-management tools and must
 // explain host model selection; standalone serves it unchanged.
 func TestHandleStartHere_HostDispatched(t *testing.T) {
-	lg, err := logging.New(filepath.Join(t.TempDir(), "maestro.log"))
+	lg, err := logging.New(filepath.Join(t.TempDir(), "maestro.log"), global.DefaultDirMode, global.DefaultFileMode)
 	if err != nil {
 		t.Fatalf("logger: %v", err)
 	}

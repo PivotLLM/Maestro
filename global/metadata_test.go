@@ -87,7 +87,7 @@ func TestSaveFileMetadata(t *testing.T) {
 			UpdatedAt: time.Now(),
 		}
 
-		err := SaveFileMetadata(filePath, meta)
+		err := SaveFileMetadata(filePath, meta, DefaultDirMode, DefaultFileMode)
 		if err != nil {
 			t.Fatalf("SaveFileMetadata() error = %v", err)
 		}
@@ -107,13 +107,13 @@ func TestSaveFileMetadata(t *testing.T) {
 
 		// Save initial metadata
 		initial := &FileMetadata{Summary: "Initial"}
-		if err := SaveFileMetadata(filePath, initial); err != nil {
+		if err := SaveFileMetadata(filePath, initial, DefaultDirMode, DefaultFileMode); err != nil {
 			t.Fatalf("Failed to save initial metadata: %v", err)
 		}
 
 		// Save updated metadata
 		updated := &FileMetadata{Summary: "Updated"}
-		if err := SaveFileMetadata(filePath, updated); err != nil {
+		if err := SaveFileMetadata(filePath, updated, DefaultDirMode, DefaultFileMode); err != nil {
 			t.Fatalf("SaveFileMetadata() error = %v", err)
 		}
 

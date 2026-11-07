@@ -7,6 +7,7 @@ package projects
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -236,12 +237,12 @@ func (s *Service) PutFile(project, path, content, summary string) (bool, error) 
 
 	// Ensure parent directory exists
 	parentDir := filepath.Dir(absPath)
-	if err := global.EnsureDir(parentDir); err != nil {
+	if err := global.EnsureDir(parentDir, s.config.DirMode()); err != nil {
 		return false, fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	// Write content atomically
-	if err := global.AtomicWrite(absPath, []byte(content)); err != nil {
+	if err := global.AtomicWrite(absPath, []byte(content), s.config.DirMode(), s.config.FileMode()); err != nil {
 		return false, err
 	}
 
@@ -254,7 +255,7 @@ func (s *Service) PutFile(project, path, content, summary string) (bool, error) 
 		meta = global.NewFileMetadata(summary)
 	}
 
-	if err := global.SaveFileMetadata(absPath, meta); err != nil {
+	if err := global.SaveFileMetadata(absPath, meta, s.config.DirMode(), s.config.FileMode()); err != nil {
 		s.logger.Warnf("Failed to save metadata for %s/%s: %v", project, path, err)
 	}
 
@@ -295,7 +296,7 @@ func (s *Service) AppendFile(project, path, content, summary string) error {
 
 	// Ensure parent directory exists
 	parentDir := filepath.Dir(absPath)
-	if err := global.EnsureDir(parentDir); err != nil {
+	if err := global.EnsureDir(parentDir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
@@ -303,7 +304,7 @@ func (s *Service) AppendFile(project, path, content, summary string) error {
 	newContent := existingContent + content
 
 	// Write content atomically
-	if err := global.AtomicWrite(absPath, []byte(newContent)); err != nil {
+	if err := global.AtomicWrite(absPath, []byte(newContent), s.config.DirMode(), s.config.FileMode()); err != nil {
 		return err
 	}
 
@@ -316,7 +317,7 @@ func (s *Service) AppendFile(project, path, content, summary string) error {
 		meta = global.NewFileMetadata(summary)
 	}
 
-	if err := global.SaveFileMetadata(absPath, meta); err != nil {
+	if err := global.SaveFileMetadata(absPath, meta, s.config.DirMode(), s.config.FileMode()); err != nil {
 		s.logger.Warnf("Failed to save metadata for %s/%s: %v", project, path, err)
 	}
 
@@ -376,7 +377,7 @@ func (s *Service) EditFile(project, path, oldString, newString string, replaceAl
 	}
 
 	// Write updated content atomically
-	if err := global.AtomicWrite(absPath, []byte(newContent)); err != nil {
+	if err := global.AtomicWrite(absPath, []byte(newContent), s.config.DirMode(), s.config.FileMode()); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -387,7 +388,7 @@ func (s *Service) EditFile(project, path, oldString, newString string, replaceAl
 		summary = existingMeta.Summary
 	}
 	meta := global.UpdateFileMetadata(existingMeta, summary)
-	if err := global.SaveFileMetadata(absPath, meta); err != nil {
+	if err := global.SaveFileMetadata(absPath, meta, s.config.DirMode(), s.config.FileMode()); err != nil {
 		s.logger.Warnf("Failed to save metadata for %s/%s: %v", project, path, err)
 	}
 
@@ -432,7 +433,7 @@ func (s *Service) RenameFile(project, fromPath, toPath string) error {
 
 	// Ensure destination directory exists
 	destDir := filepath.Dir(absToPath)
-	if err := global.EnsureDir(destDir); err != nil {
+	if err := global.EnsureDir(destDir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
@@ -527,7 +528,7 @@ func (s *Service) ImportFiles(project, source string, recursive bool) (*ImportRe
 
 	// Create base imported directory
 	baseImportedDir := filepath.Join(s.getFilesDir(project), "imported")
-	if err := global.EnsureDir(baseImportedDir); err != nil {
+	if err := global.EnsureDir(baseImportedDir, s.config.DirMode()); err != nil {
 		return nil, fmt.Errorf("failed to create imported directory: %w", err)
 	}
 
@@ -544,7 +545,7 @@ func (s *Service) ImportFiles(project, source string, recursive bool) (*ImportRe
 		// For directories, preserve the directory name: imported/<dirname>/...
 		targetDir = filepath.Join(baseImportedDir, sourceName)
 		importedTo = filepath.ToSlash(filepath.Join("imported", sourceName))
-		if err := global.EnsureDir(targetDir); err != nil {
+		if err := global.EnsureDir(targetDir, s.config.DirMode()); err != nil {
 			return nil, fmt.Errorf("failed to create target directory: %w", err)
 		}
 	}
@@ -609,7 +610,7 @@ func (s *Service) ImportFiles(project, source string, recursive bool) (*ImportRe
 			if info.Mode()&os.ModeSymlink != 0 {
 				// Ensure destination directory exists
 				destDir := filepath.Dir(destPath)
-				if err := global.EnsureDir(destDir); err != nil {
+				if err := global.EnsureDir(destDir, s.config.DirMode()); err != nil {
 					s.logger.Warnf("Failed to create directory for import: %v", err)
 					return nil
 				}
@@ -631,13 +632,13 @@ func (s *Service) ImportFiles(project, source string, recursive bool) (*ImportRe
 
 			// Ensure destination directory exists
 			destDir := filepath.Dir(destPath)
-			if err := global.EnsureDir(destDir); err != nil {
+			if err := global.EnsureDir(destDir, s.config.DirMode()); err != nil {
 				s.logger.Warnf("Failed to create directory for import: %v", err)
 				return nil
 			}
 
 			// Copy file
-			if err := copyFile(path, destPath); err != nil {
+			if err := copyFile(path, destPath, s.config.FileMode()); err != nil {
 				s.logger.Warnf("Failed to copy file %s: %v", path, err)
 				return nil
 			}
@@ -652,7 +653,7 @@ func (s *Service) ImportFiles(project, source string, recursive bool) (*ImportRe
 	} else {
 		// Import single file
 		destPath := filepath.Join(targetDir, sourceName)
-		if err := copyFile(source, destPath); err != nil {
+		if err := copyFile(source, destPath, s.config.FileMode()); err != nil {
 			return nil, fmt.Errorf("failed to copy file: %w", err)
 		}
 
@@ -809,20 +810,15 @@ func (s *Service) SanitizeSymlinks(dir string) int {
 	return sanitizeSymlinks(dir, s.logger)
 }
 
-// copyFile copies a file from src to dst, preserving permissions.
-func copyFile(src, dst string) error {
+// copyFile copies a file from src to dst, creating dst with mode.
+func copyFile(src, dst string, mode fs.FileMode) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = srcFile.Close() }()
 
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return err
-	}
-
-	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}

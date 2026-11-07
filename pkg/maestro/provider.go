@@ -98,7 +98,8 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 		reference.WithExternalDirs(externalDirs),
 		reference.WithLogger(p.logger),
 	)
-	p.playbooks = playbooks.NewService(cfg.PlaybooksDir(), p.logger)
+	p.playbooks = playbooks.NewService(cfg.PlaybooksDir(), p.logger,
+		playbooks.WithFileModes(cfg.DirMode(), cfg.FileMode()))
 	p.projects = projects.NewService(cfg, p.logger)
 	if importAllowed != nil {
 		p.projects.SetImportAllowed(importAllowed)
@@ -109,6 +110,7 @@ func (p *Provider) RegisterTools(deps toolspec.Deps) []toolspec.ToolDefinition {
 		lists.WithPlaybooksDir(cfg.PlaybooksDir()),
 		lists.WithEmbeddedFS(cfg.EmbeddedFS()),
 		lists.WithLogger(p.logger),
+		lists.WithFileModes(cfg.DirMode(), cfg.FileMode()),
 	)
 	p.llm = llm.NewService(cfg, p.logger, nil)
 

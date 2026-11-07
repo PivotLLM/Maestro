@@ -39,7 +39,7 @@ func setupTestService(t *testing.T) (*Service, string) {
 	}
 
 	logFile := filepath.Join(tempDir, "test.log")
-	logger, err := logging.New(logFile)
+	logger, err := logging.New(logFile, global.DefaultDirMode, global.DefaultFileMode)
 	if err != nil {
 		_ = os.RemoveAll(tempDir)
 		t.Fatalf("Failed to create logger: %v", err)

@@ -8,6 +8,7 @@ package global
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"time"
 )
@@ -42,8 +43,11 @@ func LoadFileMetadata(filePath string) (*FileMetadata, error) {
 	return &meta, nil
 }
 
-// SaveFileMetadata saves metadata to a sidecar file atomically.
-func SaveFileMetadata(filePath string, meta *FileMetadata) error {
+// SaveFileMetadata saves metadata to a sidecar file atomically, creating it
+// (and any missing parent directories) with the given modes. Callers pass
+// resolved modes (e.g. from config.DirMode/FileMode); zero is not replaced by
+// a default.
+func SaveFileMetadata(filePath string, meta *FileMetadata, dirMode, fileMode fs.FileMode) error {
 	metaPath := filePath + MetaSuffix
 
 	data, err := json.MarshalIndent(meta, "", "  ")
@@ -51,7 +55,7 @@ func SaveFileMetadata(filePath string, meta *FileMetadata) error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	return AtomicWrite(metaPath, data)
+	return AtomicWrite(metaPath, data, dirMode, fileMode)
 }
 
 // DeleteFileMetadata removes the sidecar metadata file for a given file.

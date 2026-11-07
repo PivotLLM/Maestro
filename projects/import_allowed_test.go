@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/PivotLLM/Maestro/config"
+	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/logging"
 )
 
@@ -21,7 +22,7 @@ func newImportTestService(t *testing.T) *Service {
 	if err := cfg.Prepare(); err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
-	lg, err := logging.New(filepath.Join(t.TempDir(), "test.log"))
+	lg, err := logging.New(filepath.Join(t.TempDir(), "test.log"), global.DefaultDirMode, global.DefaultFileMode)
 	if err != nil {
 		t.Fatalf("logger: %v", err)
 	}

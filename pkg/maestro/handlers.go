@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/PivotLLM/Maestro/app"
 	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/llm"
 )
@@ -284,8 +285,8 @@ func (p *Provider) handleHealth(call *toolspec.ToolCall) (*toolspec.Result, erro
 	result := map[string]interface{}{
 		"status":       status,
 		"healthy":      healthy,
-		"program_name": global.ProgramName,
-		"version":      global.Version,
+		"program_name": app.Name(),
+		"version":      app.Version(),
 		"base_dir":     baseDir,
 	}
 

@@ -9,6 +9,7 @@ package playbooks
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,7 +27,25 @@ var namePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 type Service struct {
 	baseDir   string
 	logger    *logging.Logger
-	pathMutex sync.Map // per-path locking
+	pathMutex sync.Map    // per-path locking
+	dirMode   fs.FileMode // mode for created directories
+	fileMode  fs.FileMode // mode for created files
+}
+
+// Option is a functional option for configuring Service.
+type Option func(*Service)
+
+// WithFileModes sets the modes for directories and files the service creates.
+// A zero value keeps the default for that one.
+func WithFileModes(dir, file fs.FileMode) Option {
+	return func(s *Service) {
+		if dir != 0 {
+			s.dirMode = dir
+		}
+		if file != 0 {
+			s.fileMode = file
+		}
+	}
 }
 
 // Playbook represents a playbook directory.
@@ -49,12 +68,18 @@ type FileItem struct {
 }
 
 // NewService creates a new playbooks service.
-func NewService(baseDir string, logger *logging.Logger) *Service {
-	return &Service{
+func NewService(baseDir string, logger *logging.Logger, opts ...Option) *Service {
+	s := &Service{
 		baseDir:   baseDir,
 		logger:    logger,
 		pathMutex: sync.Map{},
+		dirMode:   global.DefaultDirMode,
+		fileMode:  global.DefaultFileMode,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // getPathMutex gets or creates a mutex for a specific path.
@@ -153,7 +178,7 @@ func (s *Service) Create(name string) error {
 	}
 
 	// Create the directory
-	if err := os.MkdirAll(playbookPath, 0755); err != nil {
+	if err := os.MkdirAll(playbookPath, s.dirMode); err != nil {
 		return fmt.Errorf("failed to create playbook directory: %w", err)
 	}
 

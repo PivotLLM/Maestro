@@ -11,6 +11,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -169,7 +170,7 @@ func (p *Provider) handleFileExtract(call *toolspec.ToolCall) (*toolspec.Result,
 	extractDir := filepath.Join(filepath.Dir(zipPath), extractDirName)
 
 	// Extract the zip
-	extracted, skipped, err := extractZipFile(zipPath, extractDir, overwrite, p.logger)
+	extracted, skipped, err := extractZipFile(zipPath, extractDir, overwrite, p.config.DirMode(), p.config.FileMode(), p.logger)
 	if err != nil {
 		return &toolspec.Result{ForLLM: fmt.Sprintf("extraction failed: %v", err), IsError: true}, nil
 	}
@@ -209,7 +210,7 @@ func (p *Provider) handleFileExtract(call *toolspec.ToolCall) (*toolspec.Result,
 
 // extractZipFile extracts a zip archive to the specified directory.
 // Returns counts of extracted and skipped files.
-func extractZipFile(zipPath, destDir string, overwrite bool, logger interface{ Warnf(string, ...interface{}) }) (int, int, error) {
+func extractZipFile(zipPath, destDir string, overwrite bool, dirMode, fileMode fs.FileMode, logger interface{ Warnf(string, ...interface{}) }) (int, int, error) {
 	// Open the zip file
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -253,7 +254,7 @@ func extractZipFile(zipPath, destDir string, overwrite bool, logger interface{ W
 
 		// Handle directories
 		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(destPath, 0755); err != nil {
+			if err := os.MkdirAll(destPath, dirMode); err != nil {
 				return extracted, skipped, fmt.Errorf("failed to create directory %s: %w", cleanName, err)
 			}
 			continue
@@ -268,12 +269,12 @@ func extractZipFile(zipPath, destDir string, overwrite bool, logger interface{ W
 		}
 
 		// Ensure parent directory exists
-		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(destPath), dirMode); err != nil {
 			return extracted, skipped, fmt.Errorf("failed to create parent directory for %s: %w", cleanName, err)
 		}
 
 		// Extract the file
-		if err := extractZipEntry(f, destPath); err != nil {
+		if err := extractZipEntry(f, destPath, fileMode); err != nil {
 			return extracted, skipped, fmt.Errorf("failed to extract %s: %w", cleanName, err)
 		}
 
@@ -283,15 +284,16 @@ func extractZipFile(zipPath, destDir string, overwrite bool, logger interface{ W
 	return extracted, skipped, nil
 }
 
-// extractZipEntry extracts a single file from a zip archive
-func extractZipEntry(f *zip.File, destPath string) error {
+// extractZipEntry extracts a single file from a zip archive, creating it with
+// fileMode.
+func extractZipEntry(f *zip.File, destPath string, fileMode fs.FileMode) error {
 	rc, err := f.Open()
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rc.Close() }()
 
-	outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+	outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fileMode)
 	if err != nil {
 		return err
 	}

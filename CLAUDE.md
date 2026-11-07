@@ -56,8 +56,10 @@ server/
 logging/
   logging.go                 # Structured logging setup
 
+app/
+  app.go                     # Application identity: name, version, copyright (accessors only)
+
 global/
-  version.go                 # Program name and version constants
   constants.go               # Shared string constants and tool names
 ```
 

@@ -5,7 +5,17 @@
 
 package global
 
-import "fmt"
+import (
+	"fmt"
+	"io/fs"
+)
+
+// Default permission modes for directories and files Maestro creates. Hosts
+// that embed Maestro override them with config.WithFileModes.
+const (
+	DefaultDirMode  fs.FileMode = 0o755
+	DefaultFileMode fs.FileMode = 0o644
+)
 
 //goland:noinspection GoCommentStart,GoUnusedConst,GoUnusedConst,GoUnusedConst
 const (

@@ -31,7 +31,7 @@ func newProgrammaticRunner(t *testing.T, d *recordingDispatcher, opts ...config.
 	if err := cfg.Prepare(); err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
-	lg, err := logging.New(filepath.Join(base, "test.log"))
+	lg, err := logging.New(filepath.Join(base, "test.log"), global.DefaultDirMode, global.DefaultFileMode)
 	if err != nil {
 		t.Fatalf("logger: %v", err)
 	}

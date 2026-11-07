@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/logging"
 )
 
@@ -20,7 +21,7 @@ func createTestLogger(t *testing.T) *logging.Logger {
 	}
 	_ = tmpFile.Close()
 
-	logger, err := logging.New(tmpFile.Name())
+	logger, err := logging.New(tmpFile.Name(), global.DefaultDirMode, global.DefaultFileMode)
 	if err != nil {
 		_ = os.Remove(tmpFile.Name())
 		t.Fatalf("Failed to create logger: %v", err)

@@ -288,7 +288,8 @@ runner/           # Automated task execution
 llm/              # LLM dispatch client
 server/           # MCP server integration
 logging/          # Structured logging
-global/           # Constants, types, version
+global/           # Constants, types
+app/              # Application name and version
 ```
 
 ## Copyright and license

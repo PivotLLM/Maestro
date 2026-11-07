@@ -150,7 +150,7 @@ func (s *Service) saveMetadata(filePath string, meta *Metadata) error {
 
 	// Atomic write using temp file
 	tempPath := metaPath + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	if err := os.WriteFile(tempPath, data, global.DefaultFileMode); err != nil {
 		return fmt.Errorf("failed to write temp metadata file: %w", err)
 	}
 
@@ -208,13 +208,13 @@ func (s *Service) createItemFromPath(filePath string, category, relativePath str
 func atomicWrite(filePath string, content []byte) error {
 	// Ensure directory exists
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, global.DefaultDirMode); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	// Write to temporary file
 	tempPath := filePath + ".tmp"
-	if err := os.WriteFile(tempPath, content, 0644); err != nil {
+	if err := os.WriteFile(tempPath, content, global.DefaultFileMode); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 

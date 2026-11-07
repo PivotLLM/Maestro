@@ -19,8 +19,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/PivotLLM/Maestro/app"
 	"github.com/PivotLLM/Maestro/config"
-	"github.com/PivotLLM/Maestro/global"
 	"github.com/PivotLLM/Maestro/lists"
 	"github.com/PivotLLM/Maestro/llm"
 	"github.com/PivotLLM/Maestro/logging"
@@ -63,7 +63,8 @@ func New(cfg *config.Config, logger *logging.Logger) (*Server, error) {
 		reference.WithExternalDirs(externalDirs),
 		reference.WithLogger(logger),
 	)
-	playbooksService := playbooks.NewService(cfg.PlaybooksDir(), logger)
+	playbooksService := playbooks.NewService(cfg.PlaybooksDir(), logger,
+		playbooks.WithFileModes(cfg.DirMode(), cfg.FileMode()))
 	projectsService := projects.NewService(cfg, logger)
 	tasksService := tasks.NewService(cfg, projectsService, logger)
 	listsService := lists.NewService(
@@ -71,14 +72,15 @@ func New(cfg *config.Config, logger *logging.Logger) (*Server, error) {
 		lists.WithPlaybooksDir(cfg.PlaybooksDir()),
 		lists.WithEmbeddedFS(cfg.EmbeddedFS()),
 		lists.WithLogger(logger),
+		lists.WithFileModes(cfg.DirMode(), cfg.FileMode()),
 	)
 	llmService := llm.NewService(cfg, logger, nil) // No longer using library for context
 	runnerService := runner.New(cfg, logger, nil, playbooksService, referenceService, llmService, tasksService, projectsService)
 
 	// Create MCP server
 	mcpServer := server.NewMCPServer(
-		global.ProgramName,
-		global.Version,
+		app.Name(),
+		app.SemVer(),
 		server.WithToolCapabilities(true),
 		server.WithLogging(),
 	)
