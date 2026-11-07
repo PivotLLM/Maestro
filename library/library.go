@@ -8,6 +8,7 @@ package library
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,43 @@ type Service struct {
 	logger     *logging.Logger
 	categories map[string]*config.Category
 	pathMutex  sync.Map // map[string]*sync.Mutex for per-path locking
+	dirMode    fs.FileMode
+	fileMode   fs.FileMode
+}
+
+// Option configures a Service.
+type Option func(*Service)
+
+// WithFileModes sets the modes for directories and files the service creates.
+// A zero value keeps the default for that one (0700 for directories, 0600
+// for files).
+func WithFileModes(dir, file fs.FileMode) Option {
+	return func(s *Service) {
+		if dir != 0 {
+			s.dirMode = dir
+		}
+		if file != 0 {
+			s.fileMode = file
+		}
+	}
+}
+
+// NewService creates a library service over the given categories.
+func NewService(logger *logging.Logger, categories []config.Category, opts ...Option) *Service {
+	s := &Service{
+		logger:     logger,
+		categories: make(map[string]*config.Category, len(categories)),
+		dirMode:    global.DefaultDirMode,
+		fileMode:   global.DefaultFileMode,
+	}
+	for i := range categories {
+		cat := categories[i]
+		s.categories[cat.Name] = &cat
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Item represents a library item
@@ -148,15 +186,8 @@ func (s *Service) saveMetadata(filePath string, meta *Metadata) error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// Atomic write using temp file
-	tempPath := metaPath + ".tmp"
-	if err := os.WriteFile(tempPath, data, global.DefaultFileMode); err != nil {
-		return fmt.Errorf("failed to write temp metadata file: %w", err)
-	}
-
-	if err := os.Rename(tempPath, metaPath); err != nil {
-		_ = os.Remove(tempPath) // Clean up on failure
-		return fmt.Errorf("failed to rename metadata file: %w", err)
+	if err := global.AtomicWrite(metaPath, data, s.dirMode, s.fileMode); err != nil {
+		return fmt.Errorf("failed to write metadata file: %w", err)
 	}
 
 	return nil
@@ -202,29 +233,6 @@ func (s *Service) createItemFromPath(filePath string, category, relativePath str
 	}
 
 	return item, nil
-}
-
-// atomicWrite performs an atomic write using a temporary file
-func atomicWrite(filePath string, content []byte) error {
-	// Ensure directory exists
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, global.DefaultDirMode); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	// Write to temporary file
-	tempPath := filePath + ".tmp"
-	if err := os.WriteFile(tempPath, content, global.DefaultFileMode); err != nil {
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-
-	// Atomic rename
-	if err := os.Rename(tempPath, filePath); err != nil {
-		_ = os.Remove(tempPath) // Clean up on failure
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-
-	return nil
 }
 
 // GetItem retrieves metadata and optional content for a single key
@@ -274,7 +282,7 @@ func (s *Service) PutItem(key, content, summary string, overwrite bool) (bool, b
 	}
 
 	// Write content atomically
-	if err := atomicWrite(filePath, []byte(content)); err != nil {
+	if err := global.AtomicWrite(filePath, []byte(content), s.dirMode, s.fileMode); err != nil {
 		return false, false, err
 	}
 
@@ -342,7 +350,7 @@ func (s *Service) AppendItem(key, content string) (int64, error) {
 	newContent := append(existingContent, []byte(content)...)
 
 	// Write atomically
-	if err := atomicWrite(filePath, newContent); err != nil {
+	if err := global.AtomicWrite(filePath, newContent, s.dirMode, s.fileMode); err != nil {
 		return 0, err
 	}
 

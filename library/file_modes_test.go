@@ -9,6 +9,7 @@ package library
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"testing"
 
@@ -18,50 +19,60 @@ import (
 	"github.com/PivotLLM/Maestro/logging"
 )
 
-// TestDefaultModes_ReachCreatedFiles: the library always uses the owner-only
-// defaults: put, append and rename create folders 0700 and files (with their
-// metadata) 0600, under a narrowing umask and under umask 0.
-func TestDefaultModes_ReachCreatedFiles(t *testing.T) {
+// TestWithFileModes_ReachCreatedFiles: put, append and rename create folders,
+// files and metadata with exactly the modes from WithFileModes, or exactly the
+// owner-only defaults without it (a zero value keeps the default), under a
+// narrowing umask and under umask 0.
+func TestWithFileModes_ReachCreatedFiles(t *testing.T) {
+	tests := []struct {
+		name              string
+		opts              []Option
+		wantDir, wantFile fs.FileMode
+	}{
+		{"configured", []Option{WithFileModes(0o770, 0o660)}, 0o770, 0o660},
+		{"zero keeps default", []Option{WithFileModes(0, 0)}, 0o700, 0o600},
+		{"default", nil, 0o700, 0o600},
+	}
 	for _, mask := range testutil.Umasks {
-		t.Run(fmt.Sprintf("umask %04o", mask), func(t *testing.T) {
-			testutil.SetUmask(t, mask)
-			base := t.TempDir()
-			lg, err := logging.New(filepath.Join(base, "logs", "test.log"), 0, 0)
-			if err != nil {
-				t.Fatalf("logger: %v", err)
-			}
-			t.Cleanup(func() { _ = lg.Close() })
-			catDir := filepath.Join(base, "docs")
-			svc := &Service{
-				logger:     lg,
-				categories: map[string]*config.Category{"docs": {Name: "docs", Directory: catDir}},
-			}
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("umask %04o/%s", mask, tt.name), func(t *testing.T) {
+				testutil.SetUmask(t, mask)
+				base := t.TempDir()
+				lg, err := logging.New(filepath.Join(base, "logs", "test.log"), 0, 0)
+				if err != nil {
+					t.Fatalf("logger: %v", err)
+				}
+				t.Cleanup(func() { _ = lg.Close() })
+				catDir := filepath.Join(base, "docs")
+				svc := NewService(lg, []config.Category{{Name: "docs", Directory: catDir}}, tt.opts...)
 
-			if _, _, err := svc.PutItem("docs/alice/notes.md", "hello", "summary", false); err != nil {
-				t.Fatalf("PutItem: %v", err)
-			}
-			if _, err := svc.AppendItem("docs/bob/log.md", "entry"); err != nil {
-				t.Fatalf("AppendItem: %v", err)
-			}
-			if _, _, err := svc.RenameItem("docs/alice/notes.md", "docs/moved/notes.md", false); err != nil {
-				t.Fatalf("RenameItem: %v", err)
-			}
+				if _, _, err := svc.PutItem("docs/alice/notes.md", "hello", "summary", false); err != nil {
+					t.Fatalf("PutItem: %v", err)
+				}
+				if _, err := svc.AppendItem("docs/bob/log.md", "entry"); err != nil {
+					t.Fatalf("AppendItem: %v", err)
+				}
+				if _, _, err := svc.RenameItem("docs/alice/notes.md", "docs/moved/deep/notes.md", false); err != nil {
+					t.Fatalf("RenameItem: %v", err)
+				}
 
-			for _, dir := range []string{
-				catDir,
-				filepath.Join(catDir, "alice"),
-				filepath.Join(catDir, "bob"),
-				filepath.Join(catDir, "moved"),
-			} {
-				testutil.AssertPerm(t, dir, 0o700)
-			}
-			for _, file := range []string{
-				filepath.Join(catDir, "bob", "log.md"),
-				filepath.Join(catDir, "moved", "notes.md"),
-			} {
-				testutil.AssertPerm(t, file, 0o600)
-			}
-			testutil.AssertPerm(t, filepath.Join(catDir, "bob", "log.md"+global.MetaSuffix), 0o600)
-		})
+				for _, dir := range []string{
+					catDir,
+					filepath.Join(catDir, "alice"),
+					filepath.Join(catDir, "bob"),
+					filepath.Join(catDir, "moved"),
+					filepath.Join(catDir, "moved", "deep"),
+				} {
+					testutil.AssertPerm(t, dir, tt.wantDir)
+				}
+				for _, file := range []string{
+					filepath.Join(catDir, "bob", "log.md"),
+					filepath.Join(catDir, "bob", "log.md"+global.MetaSuffix),
+					filepath.Join(catDir, "moved", "deep", "notes.md"),
+				} {
+					testutil.AssertPerm(t, file, tt.wantFile)
+				}
+			})
+		}
 	}
 }
