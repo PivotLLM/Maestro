@@ -20,8 +20,8 @@ import (
 // TestExtractZipFile_UsesConfiguredModes: extracted entries get the given
 // directory and file modes, not the modes recorded in the archive.
 func TestExtractZipFile_UsesConfiguredModes(t *testing.T) {
-	testutil.ZeroUmask(t)
-	const dirMode, fileMode fs.FileMode = 0o750, 0o640
+	testutil.NarrowUmask(t)
+	const dirMode, fileMode fs.FileMode = 0o770, 0o660
 
 	zipPath := filepath.Join(t.TempDir(), "alice.zip")
 	zf, err := os.Create(zipPath)

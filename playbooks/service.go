@@ -178,7 +178,7 @@ func (s *Service) Create(name string) error {
 	}
 
 	// Create the directory
-	if err := os.MkdirAll(playbookPath, s.dirMode); err != nil {
+	if err := global.MkdirAllExact(playbookPath, s.dirMode); err != nil {
 		return fmt.Errorf("failed to create playbook directory: %w", err)
 	}
 

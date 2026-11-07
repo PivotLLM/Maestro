@@ -818,7 +818,7 @@ func copyFile(src, dst string, mode fs.FileMode) error {
 	}
 	defer func() { _ = srcFile.Close() }()
 
-	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	dstFile, err := global.OpenFileExact(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}

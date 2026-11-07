@@ -24,13 +24,13 @@ import (
 // creates: the logger's file, project.json, the project and task logs, and
 // atomically written project files with their metadata.
 func TestFileModes_ReachCreatedFiles(t *testing.T) {
-	testutil.ZeroUmask(t)
+	testutil.NarrowUmask(t)
 	tests := []struct {
 		name              string
 		opts              []config.Option
 		wantDir, wantFile fs.FileMode
 	}{
-		{"configured", []config.Option{config.WithFileModes(0o750, 0o640)}, 0o750, 0o640},
+		{"configured", []config.Option{config.WithFileModes(0o770, 0o660)}, 0o770, 0o660},
 		{"default", nil, 0o755, 0o644},
 	}
 	for _, tt := range tests {
@@ -89,8 +89,8 @@ func TestFileModes_ReachCreatedFiles(t *testing.T) {
 // file mode, not the source file's mode, for both a single file and a
 // directory import.
 func TestFileModes_ImportUsesConfiguredMode(t *testing.T) {
-	testutil.ZeroUmask(t)
-	const dirMode, fileMode fs.FileMode = 0o750, 0o640
+	testutil.NarrowUmask(t)
+	const dirMode, fileMode fs.FileMode = 0o770, 0o660
 
 	cfg := config.New(config.WithBaseDir(t.TempDir()), config.WithFileModes(dirMode, fileMode))
 	if err := cfg.Prepare(); err != nil {

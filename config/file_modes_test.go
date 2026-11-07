@@ -26,9 +26,9 @@ func TestWithFileModes(t *testing.T) {
 		wantFile fs.FileMode
 	}{
 		{"no option", nil, global.DefaultDirMode, global.DefaultFileMode},
-		{"both set", []Option{WithFileModes(0o750, 0o640)}, 0o750, 0o640},
-		{"zero dir keeps default", []Option{WithFileModes(0, 0o640)}, global.DefaultDirMode, 0o640},
-		{"zero file keeps default", []Option{WithFileModes(0o750, 0)}, 0o750, global.DefaultFileMode},
+		{"both set", []Option{WithFileModes(0o770, 0o660)}, 0o770, 0o660},
+		{"zero dir keeps default", []Option{WithFileModes(0, 0o660)}, global.DefaultDirMode, 0o660},
+		{"zero file keeps default", []Option{WithFileModes(0o770, 0)}, 0o770, global.DefaultFileMode},
 		{"both zero", []Option{WithFileModes(0, 0)}, global.DefaultDirMode, global.DefaultFileMode},
 	}
 	for _, tt := range tests {
@@ -47,13 +47,13 @@ func TestWithFileModes(t *testing.T) {
 // TestWithFileModes_PrepareCreatesDirs: the directories Prepare creates get
 // the configured mode, or exactly the default without the option.
 func TestWithFileModes_PrepareCreatesDirs(t *testing.T) {
-	testutil.ZeroUmask(t)
+	testutil.NarrowUmask(t)
 	tests := []struct {
 		name string
 		opts []Option
 		want fs.FileMode
 	}{
-		{"configured", []Option{WithFileModes(0o750, 0o640)}, 0o750},
+		{"configured", []Option{WithFileModes(0o770, 0o660)}, 0o770},
 		{"default", nil, 0o755},
 	}
 	for _, tt := range tests {

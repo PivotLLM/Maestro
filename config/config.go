@@ -28,12 +28,12 @@ func (c *Config) setupDefaultConfig(configPath string) error {
 
 	// Ensure parent directory exists
 	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, c.DirMode()); err != nil {
+	if err := global.MkdirAllExact(dir, c.DirMode()); err != nil {
 		return fmt.Errorf("failed to create config directory %s: %w", dir, err)
 	}
 
 	// Write config file
-	if err := os.WriteFile(configPath, content, c.FileMode()); err != nil {
+	if err := global.WriteFileExact(configPath, content, c.FileMode()); err != nil {
 		return fmt.Errorf("failed to write config file %s: %w", configPath, err)
 	}
 
@@ -251,7 +251,9 @@ func WithReferenceDirs(dirs []ReferenceDir) Option {
 
 // WithFileModes sets the permission modes for every directory and file Maestro
 // creates, for hosts that embed Maestro. A zero value for either keeps the
-// default for that one (global.DefaultDirMode, global.DefaultFileMode).
+// default for that one (global.DefaultDirMode, global.DefaultFileMode). Folders
+// and files Maestro creates get exactly these modes, whatever the umask;
+// existing ones keep theirs.
 func WithFileModes(dir, file fs.FileMode) Option {
 	return func(c *Config) {
 		c.dirMode = dir
@@ -290,7 +292,7 @@ func (c *Config) Load() error {
 	// If MAESTRO_CONFIG or --config points elsewhere, don't touch ~/.maestro.
 	defaultBaseDir := c.resolveDefaultBaseDir()
 	if strings.HasPrefix(configPath, defaultBaseDir) && !dirExists(defaultBaseDir) {
-		if err := os.MkdirAll(defaultBaseDir, c.DirMode()); err != nil {
+		if err := global.MkdirAllExact(defaultBaseDir, c.DirMode()); err != nil {
 			return fmt.Errorf("failed to create base directory %s: %w", defaultBaseDir, err)
 		}
 	}
@@ -643,7 +645,7 @@ func (c *Config) normalizePaths() error {
 		c.chrootDir = resolved
 
 		// Create chroot directory if it doesn't exist
-		if err := os.MkdirAll(c.chrootDir, c.DirMode()); err != nil {
+		if err := global.MkdirAllExact(c.chrootDir, c.DirMode()); err != nil {
 			return fmt.Errorf("failed to create chroot directory at %s: %w", c.chrootDir, err)
 		}
 	}
@@ -656,7 +658,7 @@ func (c *Config) normalizePaths() error {
 	c.playbooksDir = c.resolvePath(playbooksDir)
 
 	// Create playbooks directory if it doesn't exist
-	if err := os.MkdirAll(c.playbooksDir, c.DirMode()); err != nil {
+	if err := global.MkdirAllExact(c.playbooksDir, c.DirMode()); err != nil {
 		return fmt.Errorf("failed to create playbooks directory at %s: %w", c.playbooksDir, err)
 	}
 
@@ -668,7 +670,7 @@ func (c *Config) normalizePaths() error {
 	c.projectsDir = c.resolvePath(projectsDir)
 
 	// Create projects directory if it doesn't exist
-	if err := os.MkdirAll(c.projectsDir, c.DirMode()); err != nil {
+	if err := global.MkdirAllExact(c.projectsDir, c.DirMode()); err != nil {
 		return fmt.Errorf("failed to create projects directory at %s: %w", c.projectsDir, err)
 	}
 
@@ -692,7 +694,7 @@ func (c *Config) normalizePaths() error {
 		resolvedPath := c.resolvePath(refDir.Path)
 
 		// Create reference directory if it doesn't exist
-		if err := os.MkdirAll(resolvedPath, c.DirMode()); err != nil {
+		if err := global.MkdirAllExact(resolvedPath, c.DirMode()); err != nil {
 			return fmt.Errorf("failed to create reference directory at %s: %w", resolvedPath, err)
 		}
 
@@ -713,7 +715,7 @@ func (c *Config) normalizePaths() error {
 		agentsDirRaw = "agents"
 	}
 	c.agentsDir = c.resolvePath(agentsDirRaw)
-	if err := os.MkdirAll(c.agentsDir, c.DirMode()); err != nil {
+	if err := global.MkdirAllExact(c.agentsDir, c.DirMode()); err != nil {
 		return fmt.Errorf("failed to create agents directory at %s: %w", c.agentsDir, err)
 	}
 
@@ -725,7 +727,7 @@ func (c *Config) normalizePaths() error {
 			"(e.g. Claude, Codex, Gemini) are invoked by Maestro.\n\n" +
 			"It is created automatically and shared by all configured LLMs unless a\n" +
 			"per-LLM working_dir is specified in the Maestro configuration file.\n"
-		if err := os.WriteFile(agentsReadme, []byte(readmeContent), c.FileMode()); err != nil {
+		if err := global.WriteFileExact(agentsReadme, []byte(readmeContent), c.FileMode()); err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Warning: could not write agents README at %s: %v\n", agentsReadme, err)
 		}
 	}
@@ -736,7 +738,7 @@ func (c *Config) normalizePaths() error {
 			c.data.LLMs[i].WorkingDir = c.agentsDir
 		} else {
 			c.data.LLMs[i].WorkingDir = c.resolvePath(c.data.LLMs[i].WorkingDir)
-			if err := os.MkdirAll(c.data.LLMs[i].WorkingDir, c.DirMode()); err != nil {
+			if err := global.MkdirAllExact(c.data.LLMs[i].WorkingDir, c.DirMode()); err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to create working directory for LLM %s at %s: %v\n",
 					c.data.LLMs[i].ID, c.data.LLMs[i].WorkingDir, err)
 			}

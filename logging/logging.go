@@ -45,12 +45,12 @@ func New(logPath string, dirMode, fileMode fs.FileMode) (*Logger, error) {
 
 	// Ensure log directory exists
 	dir := filepath.Dir(logPath)
-	if err := os.MkdirAll(dir, dirMode); err != nil {
+	if err := global.MkdirAllExact(dir, dirMode); err != nil {
 		return nil, fmt.Errorf("failed to create log directory: %w", err)
 	}
 
 	// Open log file (append mode)
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, fileMode)
+	logFile, err := global.OpenFileExact(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, fileMode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file %s: %w", logPath, err)
 	}

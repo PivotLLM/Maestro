@@ -254,7 +254,7 @@ func extractZipFile(zipPath, destDir string, overwrite bool, dirMode, fileMode f
 
 		// Handle directories
 		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(destPath, dirMode); err != nil {
+			if err := global.MkdirAllExact(destPath, dirMode); err != nil {
 				return extracted, skipped, fmt.Errorf("failed to create directory %s: %w", cleanName, err)
 			}
 			continue
@@ -269,7 +269,7 @@ func extractZipFile(zipPath, destDir string, overwrite bool, dirMode, fileMode f
 		}
 
 		// Ensure parent directory exists
-		if err := os.MkdirAll(filepath.Dir(destPath), dirMode); err != nil {
+		if err := global.MkdirAllExact(filepath.Dir(destPath), dirMode); err != nil {
 			return extracted, skipped, fmt.Errorf("failed to create parent directory for %s: %w", cleanName, err)
 		}
 
@@ -293,7 +293,7 @@ func extractZipEntry(f *zip.File, destPath string, fileMode fs.FileMode) error {
 	}
 	defer func() { _ = rc.Close() }()
 
-	outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fileMode)
+	outFile, err := global.OpenFileExact(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fileMode)
 	if err != nil {
 		return err
 	}

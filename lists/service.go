@@ -250,7 +250,7 @@ func (s *Service) saveList(filePath string, list *global.List) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, s.dirMode); err != nil {
+	if err := global.MkdirAllExact(dir, s.dirMode); err != nil {
 		return fmt.Errorf("failed to create list directory: %w", err)
 	}
 
