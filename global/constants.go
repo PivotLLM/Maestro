@@ -10,11 +10,13 @@ import (
 	"io/fs"
 )
 
-// Default permission modes for directories and files Maestro creates. Hosts
-// that embed Maestro override them with config.WithFileModes.
+// Default permission modes for directories and files Maestro creates:
+// owner-only (0700 and 0600), applied exactly whatever the umask. Hosts that
+// embed Maestro, or standalone users who need others to read the files,
+// override them with config.WithFileModes.
 const (
-	DefaultDirMode  fs.FileMode = 0o755
-	DefaultFileMode fs.FileMode = 0o644
+	DefaultDirMode  fs.FileMode = 0o700
+	DefaultFileMode fs.FileMode = 0o600
 )
 
 //goland:noinspection GoCommentStart,GoUnusedConst,GoUnusedConst,GoUnusedConst

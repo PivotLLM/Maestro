@@ -251,7 +251,8 @@ func WithReferenceDirs(dirs []ReferenceDir) Option {
 
 // WithFileModes sets the permission modes for every directory and file Maestro
 // creates, for hosts that embed Maestro. A zero value for either keeps the
-// default for that one (global.DefaultDirMode, global.DefaultFileMode). Folders
+// default for that one (global.DefaultDirMode 0700, global.DefaultFileMode
+// 0600). Folders
 // and files Maestro creates get exactly these modes, whatever the umask;
 // existing ones keep theirs.
 func WithFileModes(dir, file fs.FileMode) Option {

@@ -72,7 +72,8 @@ func WithReferenceLoader(loader ContentLoader) Option {
 }
 
 // WithFileModes sets the permission modes SaveReport gives the folders and
-// files it creates. A zero value keeps the default.
+// files it creates. A zero value keeps the default (0700 for folders, 0600
+// for files).
 func WithFileModes(dir, file fs.FileMode) Option {
 	return func(r *Reporter) {
 		if dir != 0 {

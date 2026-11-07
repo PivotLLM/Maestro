@@ -8,6 +8,7 @@
 package config
 
 import (
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"testing"
@@ -17,8 +18,11 @@ import (
 )
 
 // TestWithFileModes: the option overrides each mode independently and a zero
-// value (or no option) keeps the default.
+// value (or no option) keeps the owner-only default.
 func TestWithFileModes(t *testing.T) {
+	if global.DefaultDirMode != 0o700 || global.DefaultFileMode != 0o600 {
+		t.Fatalf("defaults = %o/%o, want 700/600", global.DefaultDirMode, global.DefaultFileMode)
+	}
 	tests := []struct {
 		name     string
 		opts     []Option
@@ -45,26 +49,29 @@ func TestWithFileModes(t *testing.T) {
 }
 
 // TestWithFileModes_PrepareCreatesDirs: the directories Prepare creates get
-// the configured mode, or exactly the default without the option.
+// the configured mode, or exactly the owner-only default without the option,
+// under a narrowing umask and under umask 0.
 func TestWithFileModes_PrepareCreatesDirs(t *testing.T) {
-	testutil.NarrowUmask(t)
 	tests := []struct {
 		name string
 		opts []Option
 		want fs.FileMode
 	}{
 		{"configured", []Option{WithFileModes(0o770, 0o660)}, 0o770},
-		{"default", nil, 0o755},
+		{"default", nil, 0o700},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := New(append([]Option{WithBaseDir(filepath.Join(t.TempDir(), "base"))}, tt.opts...)...)
-			if err := c.Prepare(); err != nil {
-				t.Fatalf("Prepare: %v", err)
-			}
-			for _, dir := range []string{c.BaseDir(), c.PlaybooksDir(), c.ProjectsDir(), c.AgentsDir()} {
-				testutil.AssertPerm(t, dir, tt.want)
-			}
-		})
+	for _, mask := range testutil.Umasks {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("umask %04o/%s", mask, tt.name), func(t *testing.T) {
+				testutil.SetUmask(t, mask)
+				c := New(append([]Option{WithBaseDir(filepath.Join(t.TempDir(), "base"))}, tt.opts...)...)
+				if err := c.Prepare(); err != nil {
+					t.Fatalf("Prepare: %v", err)
+				}
+				for _, dir := range []string{c.BaseDir(), c.PlaybooksDir(), c.ProjectsDir(), c.AgentsDir()} {
+					testutil.AssertPerm(t, dir, tt.want)
+				}
+			})
+		}
 	}
 }

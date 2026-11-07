@@ -8,6 +8,7 @@
 package projects
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -20,68 +21,71 @@ import (
 )
 
 // TestFileModes_ReachCreatedFiles: the modes from config.WithFileModes (or
-// exactly the defaults without it) reach the directories and files a project
-// creates: the logger's file, project.json, the project and task logs, and
-// atomically written project files with their metadata.
+// exactly the owner-only defaults without it) reach the directories and files
+// a project creates: the logger's file, project.json, the project and task
+// logs, and atomically written project files with their metadata, under a
+// narrowing umask and under umask 0.
 func TestFileModes_ReachCreatedFiles(t *testing.T) {
-	testutil.NarrowUmask(t)
 	tests := []struct {
 		name              string
 		opts              []config.Option
 		wantDir, wantFile fs.FileMode
 	}{
 		{"configured", []config.Option{config.WithFileModes(0o770, 0o660)}, 0o770, 0o660},
-		{"default", nil, 0o755, 0o644},
+		{"default", nil, 0o700, 0o600},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := config.New(append([]config.Option{config.WithBaseDir(t.TempDir())}, tt.opts...)...)
-			if err := cfg.Prepare(); err != nil {
-				t.Fatalf("Prepare: %v", err)
-			}
-			logPath := filepath.Join(t.TempDir(), "logs", "test.log")
-			lg, err := logging.New(logPath, cfg.DirMode(), cfg.FileMode())
-			if err != nil {
-				t.Fatalf("logger: %v", err)
-			}
-			t.Cleanup(func() { _ = lg.Close() })
-			svc := NewService(cfg, lg)
+	for _, mask := range testutil.Umasks {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("umask %04o/%s", mask, tt.name), func(t *testing.T) {
+				testutil.SetUmask(t, mask)
+				cfg := config.New(append([]config.Option{config.WithBaseDir(t.TempDir())}, tt.opts...)...)
+				if err := cfg.Prepare(); err != nil {
+					t.Fatalf("Prepare: %v", err)
+				}
+				logPath := filepath.Join(t.TempDir(), "logs", "test.log")
+				lg, err := logging.New(logPath, cfg.DirMode(), cfg.FileMode())
+				if err != nil {
+					t.Fatalf("logger: %v", err)
+				}
+				t.Cleanup(func() { _ = lg.Close() })
+				svc := NewService(cfg, lg)
 
-			if _, err := svc.Create("alice", "Alice", "", "", "", "none"); err != nil {
-				t.Fatalf("Create: %v", err)
-			}
-			if err := svc.AppendLog("alice", "", "project entry"); err != nil {
-				t.Fatalf("AppendLog project: %v", err)
-			}
-			if err := svc.AppendLog("alice", "t1", "task entry"); err != nil {
-				t.Fatalf("AppendLog task: %v", err)
-			}
-			if _, err := svc.PutFile("alice", "notes/bob.md", "hello", "summary"); err != nil {
-				t.Fatalf("PutFile: %v", err)
-			}
+				if _, err := svc.Create("alice", "Alice", "", "", "", "none"); err != nil {
+					t.Fatalf("Create: %v", err)
+				}
+				if err := svc.AppendLog("alice", "", "project entry"); err != nil {
+					t.Fatalf("AppendLog project: %v", err)
+				}
+				if err := svc.AppendLog("alice", "t1", "task entry"); err != nil {
+					t.Fatalf("AppendLog task: %v", err)
+				}
+				if _, err := svc.PutFile("alice", "notes/bob.md", "hello", "summary"); err != nil {
+					t.Fatalf("PutFile: %v", err)
+				}
 
-			projectDir := filepath.Join(cfg.ProjectsDir(), "alice")
-			filesDir := filepath.Join(projectDir, "files")
-			for _, dir := range []string{
-				filepath.Dir(logPath),
-				projectDir,
-				filepath.Join(projectDir, "results"),
-				filesDir,
-				filepath.Join(filesDir, "notes"),
-			} {
-				testutil.AssertPerm(t, dir, tt.wantDir)
-			}
-			for _, file := range []string{
-				logPath,
-				filepath.Join(projectDir, global.ProjectFileName),
-				filepath.Join(projectDir, global.ProjectLogName),
-				filepath.Join(projectDir, "results", "task-t1.log"),
-				filepath.Join(filesDir, "notes", "bob.md"),
-				filepath.Join(filesDir, "notes", "bob.md"+global.MetaSuffix),
-			} {
-				testutil.AssertPerm(t, file, tt.wantFile)
-			}
-		})
+				projectDir := filepath.Join(cfg.ProjectsDir(), "alice")
+				filesDir := filepath.Join(projectDir, "files")
+				for _, dir := range []string{
+					filepath.Dir(logPath),
+					projectDir,
+					filepath.Join(projectDir, "results"),
+					filesDir,
+					filepath.Join(filesDir, "notes"),
+				} {
+					testutil.AssertPerm(t, dir, tt.wantDir)
+				}
+				for _, file := range []string{
+					logPath,
+					filepath.Join(projectDir, global.ProjectFileName),
+					filepath.Join(projectDir, global.ProjectLogName),
+					filepath.Join(projectDir, "results", "task-t1.log"),
+					filepath.Join(filesDir, "notes", "bob.md"),
+					filepath.Join(filesDir, "notes", "bob.md"+global.MetaSuffix),
+				} {
+					testutil.AssertPerm(t, file, tt.wantFile)
+				}
+			})
+		}
 	}
 }
 

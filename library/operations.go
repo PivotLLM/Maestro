@@ -344,7 +344,7 @@ func (s *Service) RenameItem(fromKey, toKey string, overwrite bool) (bool, bool,
 	}
 
 	// Ensure destination directory exists
-	if err := os.MkdirAll(filepath.Dir(toPath), global.DefaultDirMode); err != nil {
+	if err := global.MkdirAllExact(filepath.Dir(toPath), s.dirMode); err != nil {
 		return false, false, fmt.Errorf("failed to create destination directory: %w", err)
 	}
 

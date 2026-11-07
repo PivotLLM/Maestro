@@ -36,7 +36,8 @@ type Service struct {
 type Option func(*Service)
 
 // WithFileModes sets the modes for directories and files the service creates.
-// A zero value keeps the default for that one.
+// A zero value keeps the default for that one (0700 for directories, 0600
+// for files).
 func WithFileModes(dir, file fs.FileMode) Option {
 	return func(s *Service) {
 		if dir != 0 {
