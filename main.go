@@ -66,7 +66,7 @@ func main() {
 	}
 
 	// Initialize logger with config path
-	logger, err := logging.New(cfg.LogFile())
+	logger, err := logging.New(cfg.LogFile(), cfg.DirMode(), cfg.FileMode())
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Failed to initialize logging: %v\n", err)
 		os.Exit(1)

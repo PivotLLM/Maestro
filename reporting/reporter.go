@@ -795,11 +795,11 @@ func (r *Reporter) SaveReport(report *ProjectReport, outputPath, format string) 
 
 	// Ensure directory exists
 	dir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, global.DefaultDirMode); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(content), global.DefaultFileMode); err != nil {
 		return fmt.Errorf("failed to write report: %w", err)
 	}
 

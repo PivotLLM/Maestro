@@ -224,7 +224,7 @@ func (s *Service) StartReport(project, title, intro string) (string, error) {
 
 	// Create reports directory if it doesn't exist
 	reportsDir := s.getReportsDir(project)
-	if err := global.EnsureDir(reportsDir); err != nil {
+	if err := global.EnsureDir(reportsDir, s.config.DirMode()); err != nil {
 		return "", fmt.Errorf("failed to create reports directory: %w", err)
 	}
 
@@ -285,7 +285,7 @@ func (s *Service) AppendReport(project, content, reportName string) error {
 	}
 
 	reportsDir := s.getReportsDir(project)
-	if err := global.EnsureDir(reportsDir); err != nil {
+	if err := global.EnsureDir(reportsDir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create reports directory: %w", err)
 	}
 
@@ -341,7 +341,7 @@ func (s *Service) AppendReport(project, content, reportName string) error {
 	newContent := existingContent + content
 
 	// Write atomically
-	if err := global.AtomicWrite(absPath, []byte(newContent)); err != nil {
+	if err := global.AtomicWrite(absPath, []byte(newContent), s.config.DirMode(), s.config.FileMode()); err != nil {
 		return fmt.Errorf("failed to write report: %w", err)
 	}
 

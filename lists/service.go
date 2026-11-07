@@ -36,7 +36,9 @@ type Service struct {
 	playbooksDir string   // Base directory for playbooks
 	referenceFS  embed.FS // Embedded reference filesystem
 	logger       *logging.Logger
-	pathMutex    sync.Map // per-path locking
+	pathMutex    sync.Map    // per-path locking
+	dirMode      fs.FileMode // mode for created directories
+	fileMode     fs.FileMode // mode for created files
 }
 
 // Option is a functional option for configuring Service
@@ -70,10 +72,25 @@ func WithLogger(logger *logging.Logger) Option {
 	}
 }
 
+// WithFileModes sets the modes for directories and files the service creates.
+// A zero value keeps the default for that one.
+func WithFileModes(dir, file fs.FileMode) Option {
+	return func(s *Service) {
+		if dir != 0 {
+			s.dirMode = dir
+		}
+		if file != 0 {
+			s.fileMode = file
+		}
+	}
+}
+
 // NewService creates a new lists service with functional options.
 func NewService(opts ...Option) *Service {
 	s := &Service{
 		pathMutex: sync.Map{},
+		dirMode:   global.DefaultDirMode,
+		fileMode:  global.DefaultFileMode,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -233,12 +250,12 @@ func (s *Service) saveList(filePath string, list *global.List) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, s.dirMode); err != nil {
 		return fmt.Errorf("failed to create list directory: %w", err)
 	}
 
 	// Atomic write
-	if err := global.AtomicWrite(filePath, data); err != nil {
+	if err := global.AtomicWrite(filePath, data, s.dirMode, s.fileMode); err != nil {
 		return fmt.Errorf("failed to write list: %w", err)
 	}
 

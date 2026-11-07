@@ -7,6 +7,7 @@ package global
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"unicode/utf8"
@@ -14,17 +15,19 @@ import (
 
 // AtomicWrite writes content to a file atomically using a temporary file and rename.
 // This ensures the file is never left in a partial state.
-// Creates parent directories if they don't exist.
-func AtomicWrite(filePath string, content []byte) error {
+// Creates parent directories with dirMode if they don't exist; the file is
+// created with fileMode. Callers pass resolved modes (e.g. from
+// config.DirMode/FileMode); zero is not replaced by a default.
+func AtomicWrite(filePath string, content []byte, dirMode, fileMode fs.FileMode) error {
 	// Ensure directory exists
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	// Write to temporary file
 	tempPath := filePath + ".tmp"
-	if err := os.WriteFile(tempPath, content, 0644); err != nil {
+	if err := os.WriteFile(tempPath, content, fileMode); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 
@@ -75,7 +78,8 @@ func DirExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// EnsureDir creates a directory if it doesn't exist.
-func EnsureDir(path string) error {
-	return os.MkdirAll(path, 0755)
+// EnsureDir creates a directory with mode if it doesn't exist. Callers pass a
+// resolved mode (e.g. from config.DirMode); zero is not replaced by a default.
+func EnsureDir(path string, mode fs.FileMode) error {
+	return os.MkdirAll(path, mode)
 }

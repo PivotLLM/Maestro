@@ -190,7 +190,7 @@ func (s *Service) PutFile(playbookName, path, content, summary string) (bool, er
 	exists := err == nil
 
 	// Write content atomically
-	if err := global.AtomicWrite(absPath, []byte(content)); err != nil {
+	if err := global.AtomicWrite(absPath, []byte(content), s.dirMode, s.fileMode); err != nil {
 		return false, err
 	}
 
@@ -203,7 +203,7 @@ func (s *Service) PutFile(playbookName, path, content, summary string) (bool, er
 		meta = global.NewFileMetadata(summary)
 	}
 
-	if err := global.SaveFileMetadata(absPath, meta); err != nil {
+	if err := global.SaveFileMetadata(absPath, meta, s.dirMode, s.fileMode); err != nil {
 		s.logger.Warnf("Failed to save metadata for %s/%s: %v", playbookName, path, err)
 	}
 
@@ -246,7 +246,7 @@ func (s *Service) AppendFile(playbookName, path, content, summary string) error 
 	newContent := existingContent + content
 
 	// Write content atomically
-	if err := global.AtomicWrite(absPath, []byte(newContent)); err != nil {
+	if err := global.AtomicWrite(absPath, []byte(newContent), s.dirMode, s.fileMode); err != nil {
 		return err
 	}
 
@@ -259,7 +259,7 @@ func (s *Service) AppendFile(playbookName, path, content, summary string) error 
 		meta = global.NewFileMetadata(summary)
 	}
 
-	if err := global.SaveFileMetadata(absPath, meta); err != nil {
+	if err := global.SaveFileMetadata(absPath, meta, s.dirMode, s.fileMode); err != nil {
 		s.logger.Warnf("Failed to save metadata for %s/%s: %v", playbookName, path, err)
 	}
 
@@ -319,7 +319,7 @@ func (s *Service) EditFile(playbookName, path, oldString, newString string, repl
 	}
 
 	// Write updated content atomically
-	if err := global.AtomicWrite(absPath, []byte(newContent)); err != nil {
+	if err := global.AtomicWrite(absPath, []byte(newContent), s.dirMode, s.fileMode); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -330,7 +330,7 @@ func (s *Service) EditFile(playbookName, path, oldString, newString string, repl
 		summary = existingMeta.Summary
 	}
 	meta := global.UpdateFileMetadata(existingMeta, summary)
-	if err := global.SaveFileMetadata(absPath, meta); err != nil {
+	if err := global.SaveFileMetadata(absPath, meta, s.dirMode, s.fileMode); err != nil {
 		s.logger.Warnf("Failed to save metadata for %s/%s: %v", playbookName, path, err)
 	}
 
@@ -374,7 +374,7 @@ func (s *Service) RenameFile(playbookName, fromPath, toPath string) error {
 
 	// Ensure destination directory exists
 	destDir := filepath.Dir(absToPath)
-	if err := global.EnsureDir(destDir); err != nil {
+	if err := global.EnsureDir(destDir, s.dirMode); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 

@@ -85,7 +85,7 @@ func setupTestRunner(t *testing.T) (*testRunner, string) {
 
 	// Create logger with temp log file
 	logPath := filepath.Join(tmpDir, "test.log")
-	logger, err := logging.New(logPath)
+	logger, err := logging.New(logPath, global.DefaultDirMode, global.DefaultFileMode)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}

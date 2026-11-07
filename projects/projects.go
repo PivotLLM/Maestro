@@ -191,25 +191,25 @@ func (s *Service) saveProject(project string, proj *global.Project) error {
 	projectPath := s.getProjectFilePath(project)
 
 	// Ensure directory exists
-	if err := os.MkdirAll(projectDir, 0755); err != nil {
+	if err := os.MkdirAll(projectDir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create project directory: %w", err)
 	}
 
 	// Create results directory
 	resultsDir := s.getResultsDir(project)
-	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+	if err := os.MkdirAll(resultsDir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create results directory: %w", err)
 	}
 
 	// Create tasks directory
 	tasksDir := filepath.Join(projectDir, global.TasksDir)
-	if err := os.MkdirAll(tasksDir, 0755); err != nil {
+	if err := os.MkdirAll(tasksDir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create tasks directory: %w", err)
 	}
 
 	// Create files directory
 	filesDir := filepath.Join(projectDir, "files")
-	if err := os.MkdirAll(filesDir, 0755); err != nil {
+	if err := os.MkdirAll(filesDir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create files directory: %w", err)
 	}
 
@@ -221,7 +221,7 @@ func (s *Service) saveProject(project string, proj *global.Project) error {
 
 	// Atomic write using temp file
 	tempPath := projectPath + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	if err := os.WriteFile(tempPath, data, s.config.FileMode()); err != nil {
 		return fmt.Errorf("failed to write temp project file: %w", err)
 	}
 
@@ -543,12 +543,12 @@ func (s *Service) appendLogEntry(project, message string) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(logPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, s.config.DirMode()); err != nil {
 		return fmt.Errorf("failed to create project directory: %w", err)
 	}
 
 	// Open file in append mode
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, s.config.FileMode())
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -588,11 +588,11 @@ func (s *Service) AppendLog(project, taskID, message string) error {
 
 		// Ensure directory exists
 		dir := filepath.Dir(taskLogPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, s.config.DirMode()); err != nil {
 			return fmt.Errorf("failed to create results directory: %w", err)
 		}
 
-		f, err := os.OpenFile(taskLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f, err := os.OpenFile(taskLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, s.config.FileMode())
 		if err != nil {
 			return fmt.Errorf("failed to open task log file: %w", err)
 		}

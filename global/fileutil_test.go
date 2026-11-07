@@ -25,7 +25,7 @@ func TestAtomicWrite(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "new-file.txt")
 		content := []byte("Hello, World!")
 
-		err := AtomicWrite(filePath, content)
+		err := AtomicWrite(filePath, content, DefaultDirMode, DefaultFileMode)
 		if err != nil {
 			t.Fatalf("AtomicWrite() error = %v", err)
 		}
@@ -49,7 +49,7 @@ func TestAtomicWrite(t *testing.T) {
 		}
 
 		newContent := []byte("new content")
-		err := AtomicWrite(filePath, newContent)
+		err := AtomicWrite(filePath, newContent, DefaultDirMode, DefaultFileMode)
 		if err != nil {
 			t.Fatalf("AtomicWrite() error = %v", err)
 		}
@@ -67,7 +67,7 @@ func TestAtomicWrite(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "a", "b", "c", "nested-file.txt")
 		content := []byte("nested content")
 
-		err := AtomicWrite(filePath, content)
+		err := AtomicWrite(filePath, content, DefaultDirMode, DefaultFileMode)
 		if err != nil {
 			t.Fatalf("AtomicWrite() error = %v", err)
 		}
@@ -85,7 +85,7 @@ func TestAtomicWrite(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "clean-file.txt")
 		tempPath := filePath + ".tmp"
 
-		err := AtomicWrite(filePath, []byte("content"))
+		err := AtomicWrite(filePath, []byte("content"), DefaultDirMode, DefaultFileMode)
 		if err != nil {
 			t.Fatalf("AtomicWrite() error = %v", err)
 		}
@@ -268,7 +268,7 @@ func TestEnsureDir(t *testing.T) {
 	t.Run("create new directory", func(t *testing.T) {
 		dirPath := filepath.Join(tmpDir, "new-dir")
 
-		err := EnsureDir(dirPath)
+		err := EnsureDir(dirPath, DefaultDirMode)
 		if err != nil {
 			t.Fatalf("EnsureDir() error = %v", err)
 		}
@@ -281,7 +281,7 @@ func TestEnsureDir(t *testing.T) {
 	t.Run("create nested directories", func(t *testing.T) {
 		dirPath := filepath.Join(tmpDir, "a", "b", "c")
 
-		err := EnsureDir(dirPath)
+		err := EnsureDir(dirPath, DefaultDirMode)
 		if err != nil {
 			t.Fatalf("EnsureDir() error = %v", err)
 		}
@@ -292,7 +292,7 @@ func TestEnsureDir(t *testing.T) {
 	})
 
 	t.Run("existing directory is fine", func(t *testing.T) {
-		err := EnsureDir(tmpDir)
+		err := EnsureDir(tmpDir, DefaultDirMode)
 		if err != nil {
 			t.Errorf("EnsureDir() error = %v for existing directory", err)
 		}

@@ -77,7 +77,7 @@ func setupTestRunnerWithLLMConfig(t *testing.T, llmsJSON, defaultLLM string) (*t
 	}
 
 	logPath := filepath.Join(tmpDir, "test.log")
-	logger, err := logging.New(logPath)
+	logger, err := logging.New(logPath, global.DefaultDirMode, global.DefaultFileMode)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}

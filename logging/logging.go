@@ -8,6 +8,7 @@ package logging
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,8 +24,17 @@ type Logger struct {
 	logFile *os.File
 }
 
-// New creates a new logger instance that writes to the specified file
-func New(logPath string) (*Logger, error) {
+// New creates a new logger instance that writes to the specified file. A
+// missing log directory is created with dirMode and a new log file with
+// fileMode; a zero value for either uses the default for that one.
+func New(logPath string, dirMode, fileMode fs.FileMode) (*Logger, error) {
+	if dirMode == 0 {
+		dirMode = global.DefaultDirMode
+	}
+	if fileMode == 0 {
+		fileMode = global.DefaultFileMode
+	}
+
 	// Expand tilde in path
 	if len(logPath) >= 2 && logPath[:2] == "~/" {
 		homeDir, err := os.UserHomeDir()
@@ -35,12 +45,12 @@ func New(logPath string) (*Logger, error) {
 
 	// Ensure log directory exists
 	dir := filepath.Dir(logPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return nil, fmt.Errorf("failed to create log directory: %w", err)
 	}
 
 	// Open log file (append mode)
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, fileMode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file %s: %w", logPath, err)
 	}
