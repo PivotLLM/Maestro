@@ -371,6 +371,8 @@ Reference files are embedded in the executable at compile time using Go's embed 
 - **Immutable**: Content cannot be modified at runtime
 - **Bundled**: Files come from the `docs/ai/` directory in source
 - **External directories**: Optional additional directories via `reference_dirs` config
+  - Each directory is opened as an `os.Root`: nothing outside it can be read. Symbolic links are followed only when they stay inside the directory; links that lead outside are left out of listings and searches, and reading one returns an error.
+  - A mount whose name equals a built-in top-level entry (`reference.BuiltinNames`) is ignored with a logged warning, so the built-in files always stay reachable.
 
 ### Reference Tools
 

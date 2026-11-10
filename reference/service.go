@@ -8,10 +8,14 @@ package reference
 
 import (
 	"embed"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -72,6 +76,10 @@ func WithLogger(logger *logging.Logger) Option {
 }
 
 // NewService creates a new reference service with functional options.
+//
+// An external directory whose mount name equals a built-in top-level name
+// (see BuiltinNames) is ignored with a logged warning, so the built-in
+// reference files are always reachable.
 func NewService(opts ...Option) *Service {
 	s := &Service{
 		prefix: embeddedPrefix,
@@ -79,7 +87,102 @@ func NewService(opts ...Option) *Service {
 	for _, opt := range opts {
 		opt(s)
 	}
+
+	builtins := topLevelNames(s.fs, s.prefix)
+	var kept []ExternalDir
+	for _, dir := range s.externalDirs {
+		if slices.Contains(builtins, dir.Mount) {
+			if s.logger != nil {
+				s.logger.Warnf("Ignoring reference directory %s: mount name %q is a built-in reference name", dir.Path, dir.Mount)
+			}
+			continue
+		}
+		kept = append(kept, dir)
+	}
+	s.externalDirs = kept
+
 	return s
+}
+
+// BuiltinNames returns the sorted top-level file and folder names of the
+// built-in reference library in efs (the filesystem passed to WithEmbeddedFS).
+// An external directory mounted under one of these names is ignored, so an
+// embedding application should name its mounts around them.
+func BuiltinNames(efs fs.FS) []string {
+	return topLevelNames(efs, embeddedPrefix)
+}
+
+// topLevelNames returns the sorted names of the entries directly under dir in
+// fsys, or nil if dir cannot be read.
+func topLevelNames(fsys fs.FS, dir string) []string {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	return names
+}
+
+// walkExternal calls fn for every regular file in extDir. The directory is
+// opened as an os.Root, so symbolic links are followed only while they stay
+// inside it: a link that resolves outside the directory, or to a directory, is
+// skipped. fsys is the root's filesystem and relPath the file's path in it.
+func walkExternal(extDir ExternalDir, fn func(fullPath string, fsys fs.FS, relPath string, info fs.FileInfo)) error {
+	root, err := os.OpenRoot(extDir.Path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+
+	fsys := root.FS()
+	return fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil // Skip unreadable entries and directories
+		}
+		// fs.Stat follows symbolic links, but only within the root.
+		info, err := fs.Stat(fsys, path)
+		if err != nil || !info.Mode().IsRegular() {
+			return nil
+		}
+		fn(extDir.Mount+"/"+path, fsys, path, info)
+		return nil
+	})
+}
+
+// readExternal reads relPath within dir through an os.Root, so neither the
+// path nor any symbolic link along it can reach outside dir.
+func readExternal(dir, relPath string) ([]byte, fs.FileInfo, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = root.Close() }()
+
+	if relPath == "" {
+		relPath = "."
+	}
+	f, err := root.Open(relPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("%s is not a regular file", relPath)
+	}
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return nil, nil, err
+	}
+	return content, info, nil
 }
 
 // validatePath validates and cleans a path, preventing path traversal.
@@ -129,8 +232,8 @@ func (s *Service) isExternal(path string) bool {
 	return extDir != nil
 }
 
-// resolveExternalPath resolves an external path to a filesystem path.
-// Returns the absolute filesystem path, the relative path, and the mount name.
+// resolveExternalPath resolves an external path to its reference directory.
+// Returns the directory, the cleaned path relative to it, and the mount name.
 func (s *Service) resolveExternalPath(path string) (string, string, string, error) {
 	extDir, relPath := s.findExternalDir(path)
 	if extDir == nil {
@@ -143,10 +246,11 @@ func (s *Service) resolveExternalPath(path string) (string, string, string, erro
 		return "", "", "", fmt.Errorf("path traversal attempt detected: %s", path)
 	}
 
-	// Build absolute path
-	absPath := filepath.Join(extDir.Path, cleanPath)
+	if cleanPath == "." {
+		cleanPath = ""
+	}
 
-	return absPath, relPath, extDir.Mount, nil
+	return extDir.Path, cleanPath, extDir.Mount, nil
 }
 
 // List returns all reference files, optionally filtered by prefix.
@@ -203,59 +307,20 @@ func (s *Service) List(prefix string) ([]Item, error) {
 
 	// Also walk all external reference directories
 	for _, extDir := range s.externalDirs {
-		// Check if directory exists
-		if _, err := os.Stat(extDir.Path); err == nil {
-			mountPrefix := extDir.Mount
-			dirPath := extDir.Path
-
-			err = filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return nil // Skip errors in external directory
-				}
-
-				// Skip the root directory itself
-				if path == dirPath {
-					return nil
-				}
-
-				// Skip directories
-				if d.IsDir() {
-					return nil
-				}
-
-				// Get relative path from external dir
-				relPath, err := filepath.Rel(dirPath, path)
-				if err != nil {
-					return nil // Skip if we can't get relative path
-				}
-
-				// Normalize to forward slashes and add mount prefix
-				relPath = filepath.ToSlash(relPath)
-				fullPath := mountPrefix + "/" + relPath
-
-				// Apply prefix filter if specified
-				if prefix != "" && !strings.HasPrefix(fullPath, prefix) {
-					return nil
-				}
-
-				// Get file info
-				info, err := d.Info()
-				if err != nil {
-					return nil // Skip if we can't get info
-				}
-
-				items = append(items, Item{
-					Path:       fullPath,
-					SizeBytes:  info.Size(),
-					ModifiedAt: info.ModTime(),
-				})
-
-				return nil
-			})
-			// Don't fail if external directory walk has errors - just log
-			if err != nil {
-				s.logger.Warnf("Error walking external reference directory %s: %v", extDir.Mount, err)
+		err := walkExternal(extDir, func(fullPath string, _ fs.FS, _ string, info fs.FileInfo) {
+			// Apply prefix filter if specified
+			if prefix != "" && !strings.HasPrefix(fullPath, prefix) {
+				return
 			}
+			items = append(items, Item{
+				Path:       fullPath,
+				SizeBytes:  info.Size(),
+				ModifiedAt: info.ModTime(),
+			})
+		})
+		// A missing directory is skipped; other errors are logged, not fatal
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			s.logger.Warnf("Error walking external reference directory %s: %v", extDir.Mount, err)
 		}
 	}
 
@@ -274,24 +339,19 @@ func (s *Service) Get(path string, offset, maxBytes int64) (*Item, error) {
 	// Check if this is an external file
 	if s.isExternal(path) {
 		// Read from external reference directory
-		absPath, _, mount, err := s.resolveExternalPath(path)
+		dir, relPath, mount, err := s.resolveExternalPath(path)
 		if err != nil {
 			return nil, err
 		}
 
-		// Read the file
-		content, err = os.ReadFile(absPath)
+		// Read the file; nothing outside the directory can be reached.
+		var info fs.FileInfo
+		content, info, err = readExternal(dir, relPath)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, fs.ErrNotExist) {
 				return nil, fmt.Errorf("reference file not found: %s", path)
 			}
-			return nil, fmt.Errorf("failed to read reference file from %s: %w", mount, err)
-		}
-
-		// Get file info
-		info, err := os.Stat(absPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to stat reference file: %w", err)
+			return nil, fmt.Errorf("failed to read reference file %s from %s: %w", path, mount, err)
 		}
 		totalBytes = info.Size()
 		modTime = info.ModTime()
@@ -429,60 +489,29 @@ func (s *Service) Search(query string, limit, offset int) ([]Item, int, error) {
 
 	// Also search all external reference directories
 	for _, extDir := range s.externalDirs {
-		if _, err := os.Stat(extDir.Path); err == nil {
-			mountPrefix := extDir.Mount
-			dirPath := extDir.Path
+		err := walkExternal(extDir, func(fullPath string, fsys fs.FS, relPath string, info fs.FileInfo) {
+			// Check if path matches
+			pathMatch := strings.Contains(strings.ToLower(fullPath), lowerQuery)
 
-			err = filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return nil // Skip errors in external directory
-				}
-
-				// Skip directories
-				if d.IsDir() {
-					return nil
-				}
-
-				// Get relative path from external dir
-				relPath, err := filepath.Rel(dirPath, path)
-				if err != nil {
-					return nil
-				}
-
-				// Add mount prefix
-				relPath = filepath.ToSlash(relPath)
-				fullPath := mountPrefix + "/" + relPath
-
-				// Check if path matches
-				pathMatch := strings.Contains(strings.ToLower(fullPath), lowerQuery)
-
-				// Read content and check for matches
-				content, err := os.ReadFile(path)
-				if err != nil {
-					return nil // Skip files we can't read
-				}
-
-				contentMatch := strings.Contains(strings.ToLower(string(content)), lowerQuery)
-
-				if pathMatch || contentMatch {
-					info, err := d.Info()
-					if err != nil {
-						return nil
-					}
-
-					allMatches = append(allMatches, Item{
-						Path:       fullPath,
-						SizeBytes:  info.Size(),
-						ModifiedAt: info.ModTime(),
-					})
-				}
-
-				return nil
-			})
-			// Don't fail if external directory walk has errors - just log
+			// Read content and check for matches
+			content, err := fs.ReadFile(fsys, relPath)
 			if err != nil {
-				s.logger.Warnf("Error searching external reference directory %s: %v", extDir.Mount, err)
+				return // Skip files we can't read
 			}
+
+			contentMatch := strings.Contains(strings.ToLower(string(content)), lowerQuery)
+
+			if pathMatch || contentMatch {
+				allMatches = append(allMatches, Item{
+					Path:       fullPath,
+					SizeBytes:  info.Size(),
+					ModifiedAt: info.ModTime(),
+				})
+			}
+		})
+		// A missing directory is skipped; other errors are logged, not fatal
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			s.logger.Warnf("Error searching external reference directory %s: %v", extDir.Mount, err)
 		}
 	}
 
