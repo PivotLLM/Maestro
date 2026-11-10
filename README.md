@@ -63,7 +63,7 @@ NOTE: You must enable at least once cli-based LLM in the config file for Maestro
 }
 ```
 
-**Optional**: Use `reference_dirs` to mount external directories into the reference library. Each entry has a `path` (filesystem location) and `mount` (prefix in reference library). Files appear as `mount/filename.md`.
+**Optional**: Use `reference_dirs` to mount external directories into the reference library. Each entry has a `path` (filesystem location) and `mount` (prefix in reference library). Files appear as `mount/filename.md`. Files are read only from inside each directory: symbolic links are followed only when they stay inside it, and links that lead outside are skipped. A mount named like a built-in reference entry (`templates`, `phases`, `playbook-examples`, `start.md`, ...) is ignored with a logged warning; embedding applications can get the full list from `reference.BuiltinNames(maestro.EmbeddedReference)`.
 
 ## Use
 
