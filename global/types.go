@@ -133,7 +133,7 @@ type Message struct {
 	Success       bool   `json:"success,omitempty"`        // True iff exit==0 AND no provider-reported error
 	NumTurns      int    `json:"num_turns,omitempty"`      // Number of provider turns
 
-	// Resource accounting (mirrors ClawEh DispatchStatus where applicable)
+	// Resource accounting (mirrors the host's dispatch status where applicable)
 	InputTokens         int     `json:"input_tokens,omitempty"`
 	OutputTokens        int     `json:"output_tokens,omitempty"`
 	CacheReadTokens     int     `json:"cache_read_tokens,omitempty"`

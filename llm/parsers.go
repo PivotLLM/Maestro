@@ -18,7 +18,7 @@ import (
 // Fields fall into three groups:
 //   - response: Text, ResponseParsed
 //   - termination/error envelope: IsError, NormalTermination, StopReason
-//   - resource accounting (mirrors ClawEh DispatchStatus where applicable):
+//   - resource accounting (mirrors the host's dispatch status where applicable):
 //     NumTurns, InputTokens, OutputTokens, CacheReadTokens, CacheCreationTokens,
 //     CostUSD, DurationMs, ProviderModel
 type ParsedOutput struct {

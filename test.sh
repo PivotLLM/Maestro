@@ -54,7 +54,7 @@ CONFIG="$SRC/.config-test-runtime.json"
 
 # Execution mode.
 #   stdio (default): build and drive the maestro binary directly over stdio.
-#   host:            drive Maestro embedded in a host (e.g. ClawEh) over the
+#   host:            drive Maestro embedded in a host application over the
 #                    host's MCP endpoint. Requires:
 #                      MCP_URL    the host's MCP endpoint (e.g. http://127.0.0.1:8080/mcp)
 #                      MCP_TOKEN  a bearer token for that endpoint

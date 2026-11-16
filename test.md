@@ -6,7 +6,7 @@ The Maestro test suite (`test.sh`) provides comprehensive automated testing for 
 
 ## Host Mode
 
-`test.sh` can also drive Maestro **embedded in a host** (for example ClawEh)
+`test.sh` can also drive Maestro **embedded in a host application**
 instead of the standalone binary. The engine sections run unchanged against the
 host's MCP endpoint; the sections that depend on the standalone LLM
 configuration (fresh start, LLM tools, health fields, LLM history capture) have

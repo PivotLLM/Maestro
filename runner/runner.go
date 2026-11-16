@@ -45,7 +45,7 @@ type Runner struct {
 	validator   *templates.Validator
 	rateLimiter *RateLimiter
 	// hostDispatched is true when the LLM dispatcher is injected by an embedding
-	// host (e.g. ClawEh) that owns model selection. In that mode Maestro does not
+	// host application that owns model selection. In that mode Maestro does not
 	// resolve, validate, or require any model of its own — it just hands the
 	// prompt to the host and lets it pick the model.
 	hostDispatched  atomic.Bool
@@ -519,14 +519,14 @@ func (r *Runner) recordHistory(project, taskUUID, role, msgType, content, llmID 
 const llmFinishErrorMaxLen = 500
 
 // logLLMDispatch emits a structured "LLM dispatch" INFO record before
-// invoking an LLM. Mirrors the ClawEh dispatch logging shape.
+// invoking an LLM. Mirrors the host's dispatch logging shape.
 func (r *Runner) logLLMDispatch(taskID int, project, path, llmID string, promptBytes int) {
 	r.logger.Infof("LLM dispatch task_id=%d project=%q path=%q llm_id=%q prompt_bytes=%d",
 		taskID, project, path, llmID, promptBytes)
 }
 
 // logLLMFinish emits a structured "LLM finish" INFO record after an LLM
-// invocation returns, regardless of success or error. Mirrors the ClawEh
+// invocation returns, regardless of success or error. Mirrors the host's
 // finish logging shape. errorMsg is truncated to llmFinishErrorMaxLen.
 func (r *Runner) logLLMFinish(taskID int, llmID string, result *llm.DispatchResult, errorMsg string) {
 	if result == nil {
@@ -3322,7 +3322,7 @@ const (
 )
 
 // CompletionSink receives the JSON-encoded CallbackPayload when a taskset run
-// finishes. An embedding host (e.g. ClawEh) injects one to deliver the
+// finishes. An embedding host application injects one to deliver the
 // completion to the agent; standalone Maestro passes nil (no callback). This
 // replaces the former HTTP callback_url POST.
 type CompletionSink func(payloadJSON []byte)

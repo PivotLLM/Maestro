@@ -62,7 +62,7 @@ type DispatchResult struct {
 	NormalTermination bool   `json:"normal_termination,omitempty"` // true when LLM completed normally
 	StopReason        string `json:"stop_reason,omitempty"`        // provider-reported stop reason (populated on success and abnormal termination)
 
-	// Resource accounting (mirrors ClawEh DispatchStatus where applicable)
+	// Resource accounting (mirrors the host's dispatch status where applicable)
 	InputTokens         int     `json:"input_tokens,omitempty"`
 	OutputTokens        int     `json:"output_tokens,omitempty"`
 	CacheReadTokens     int     `json:"cache_read_tokens,omitempty"`
@@ -130,7 +130,7 @@ func IsPermanent(err error) bool {
 }
 
 // Dispatcher is the LLM-execution seam the runner depends on. The built-in
-// *Service satisfies it for the standalone binary; a host (e.g. ClawEh) injects
+// *Service satisfies it for the standalone binary; a host application injects
 // its own implementation so that *the host* decides which model to call and how
 // to run it. Maestro's tools only describe the work (a DispatchRequest); the
 // Dispatcher turns it into a DispatchResult. The metadata methods let the runner
@@ -429,7 +429,7 @@ func (s *Service) callCommandLLM(llm *config.LLM, req *DispatchRequest, contextC
 	// BytesSent in DispatchResult. For stdin-mode LLMs this is len(promptText);
 	// for args-mode LLMs the prompt is embedded in args, so summing arg lengths
 	// captures the full payload (prompt + any flag-bearing arguments).
-	// Matches ClawEh's bytes_sent semantics for CLI providers.
+	// Matches the host's bytes_sent semantics for CLI providers.
 	var bytesSent int64
 	if llm.Stdin {
 		bytesSent = int64(len(promptText))
