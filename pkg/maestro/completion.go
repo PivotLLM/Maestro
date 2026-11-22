@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/PivotLLM/Maestro/runner"
-	"github.com/PivotLLM/toolspec"
+	"go.bison9.com/agent/toolspec"
 )
 
 // completionSink adapts a per-call Notify hook into a runner.CompletionSink.

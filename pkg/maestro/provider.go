@@ -18,7 +18,7 @@ import (
 	"github.com/PivotLLM/Maestro/runner"
 	"github.com/PivotLLM/Maestro/tasks"
 
-	"github.com/PivotLLM/toolspec"
+	"go.bison9.com/agent/toolspec"
 )
 
 // HostDeps encapsulates the host-provided services

@@ -6,7 +6,7 @@
 package maestro
 
 import (
-	"github.com/PivotLLM/toolspec"
+	"go.bison9.com/agent/toolspec"
 
 	"fmt"
 	"slices"

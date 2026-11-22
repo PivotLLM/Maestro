@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/PivotLLM/Maestro/runner"
-	"github.com/PivotLLM/toolspec"
+	"go.bison9.com/agent/toolspec"
 )
 
 func TestCompletionSink_NilWhenNoNotify(t *testing.T) {

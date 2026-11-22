@@ -2,7 +2,7 @@ package maestro
 
 import (
 	"github.com/PivotLLM/Maestro/global"
-	"github.com/PivotLLM/toolspec"
+	"go.bison9.com/agent/toolspec"
 )
 
 func (p *Provider) getToolDefinitions() []toolspec.ToolDefinition {

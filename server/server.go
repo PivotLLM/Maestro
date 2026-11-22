@@ -8,7 +8,7 @@ package server
 import (
 	"context"
 	"github.com/PivotLLM/Maestro/pkg/maestro"
-	"github.com/PivotLLM/toolspec"
+	"go.bison9.com/agent/toolspec"
 	"strings"
 
 	"fmt"
